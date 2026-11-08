@@ -1,0 +1,24 @@
+# Auto PR Labeler configuration for FileManager
+
+android:
+  - 'app/src/main/java/com/example/**'
+  - 'app/src/main/res/**'
+  - 'gradle/**'
+
+documentation:
+  - 'book/**'
+  - 'CHANGELOG.md'
+  - 'README.md'
+  - '**/*.md'
+
+ci-cd:
+  - '.github/**'
+
+dependencies:
+  - 'gradle/libs.versions.toml'
+  - 'build.gradle.kts'
+  - 'app/build.gradle.kts'
+
+tests:
+  - 'app/src/test/**'
+  - 'app/src/androidTest/**'

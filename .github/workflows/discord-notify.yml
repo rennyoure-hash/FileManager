@@ -1,0 +1,25 @@
+name: Discord Notifications
+
+on:
+  workflow_run:
+    workflows: ["CI", "Test & Lint", "Detekt Static Analysis"]
+    types:
+      - completed
+
+jobs:
+  notify:
+    name: Notify on Discord
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Send Discord Notification
+        uses: Ilshidur/action-discord@bb23bf8d6f94dae04c78e20b693cb7831bd870ba
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          args: |
+            ${{ github.workflow }} run ${{ github.run_number }} concluded with status: ${{ github.event.workflow_run.conclusion }}
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.event.workflow_run.head_branch }}
+            URL: ${{ github.event.workflow_run.html_url }}

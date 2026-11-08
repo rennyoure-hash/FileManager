@@ -1,0 +1,29 @@
+name: Gradle Dependency Submission
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  submit-dependencies:
+    name: Submit Gradle Dependency Graph
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Submit Gradle dependency snapshots
+        uses: gradle/actions/dependency-submission@v2

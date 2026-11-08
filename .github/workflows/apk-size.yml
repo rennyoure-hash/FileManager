@@ -1,0 +1,44 @@
+name: APK Size Watcher
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  size-diff:
+    name: APK Size Diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Compute APK Size
+        id: apk-size
+        run: |
+          SIZE=$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+          echo "APK size: $SIZE bytes (${{ format('{0:.2f}', SIZE / 1048576) }} MB)"
+
+      - name: Create Size Summary
+        run: |
+          echo "## APK Size" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| APK Debug | ${{ steps.apk-size.outputs.size }} bytes |" >> $GITHUB_STEP_SUMMARY

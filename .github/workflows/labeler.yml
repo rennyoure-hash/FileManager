@@ -1,0 +1,20 @@
+name: Auto Label Pull Requests
+
+on:
+  pull_request:
+    types: [ opened, synchronize, reopened, labeled ]
+  workflow_dispatch:
+
+jobs:
+  labeler:
+    name: Auto Label PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Auto Label
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sync-labels: true
+          configuration-path: .github/labeler.yml
