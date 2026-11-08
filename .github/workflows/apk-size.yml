@@ -23,8 +23,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Install Gradle
+        run: |
+          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
+          unzip -q gradle.zip
+          GRADLE_HOME="$PWD/gradle-9.3.1"
+          export PATH="$GRADLE_HOME/bin:$PATH"
+          gradle wrapper --gradle-version 9.3.1
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
