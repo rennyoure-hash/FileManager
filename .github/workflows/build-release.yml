@@ -34,14 +34,14 @@ jobs:
         run: ./gradlew bundleRelease --no-daemon
 
       - name: Upload Release APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 90
 
       - name: Upload Release Bundle (AAB)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/app-release.aab
