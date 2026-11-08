@@ -14,6 +14,7 @@ jobs:
 
     steps:
       - name: Send Discord Notification
+        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
         uses: Ilshidur/action-discord@bb23bf8d6f94dae04c78e20b693cb7831bd870ba
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}

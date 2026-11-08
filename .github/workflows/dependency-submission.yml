@@ -26,4 +26,5 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Submit Gradle dependency snapshots
+        continue-on-error: true
         uses: gradle/actions/dependency-submission@v2
