@@ -34,7 +34,8 @@ jobs:
         run: |
           SIZE=$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)
           echo "size=$SIZE" >> $GITHUB_OUTPUT
-          echo "APK size: $SIZE bytes (${{ format('{0:.2f}', SIZE / 1048576) }} MB)"
+          MB=$((SIZE / 1048576))
+          echo "APK size: $SIZE bytes ($MB MB)"
 
       - name: Create Size Summary
         run: |
