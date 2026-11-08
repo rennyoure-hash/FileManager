@@ -9,6 +9,7 @@ jobs:
   submit-dependencies:
     name: Submit Gradle Dependency Graph
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: write
 

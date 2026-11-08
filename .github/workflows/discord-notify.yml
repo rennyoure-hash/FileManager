@@ -10,6 +10,7 @@ jobs:
   notify:
     name: Notify on Discord
     runs-on: ubuntu-latest
+    continue-on-error: true
     timeout-minutes: 5
 
     steps:
