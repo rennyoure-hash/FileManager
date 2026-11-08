@@ -1,0 +1,14 @@
+[book]
+title = "MT Explorer"
+description = "Advanced dual-pane Android file manager"
+authors = ["Renn"]
+language = "en"
+multilingual = false
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+theme = "rust"
+git-repository-url = "https://github.com/rennyoure-hash/FileManager"
