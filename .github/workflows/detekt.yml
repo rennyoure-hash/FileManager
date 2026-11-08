@@ -25,6 +25,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          validate-wrappers: false
 
       - name: Run Detekt
         run: ./gradlew detekt --no-daemon

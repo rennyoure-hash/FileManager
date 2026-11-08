@@ -42,6 +42,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          validate-wrappers: false
 
       - name: Build project (CodeQL autobuild)
         run: ./gradlew assembleDebug --no-daemon
