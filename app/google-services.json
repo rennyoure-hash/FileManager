@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1234567890",
+    "project_id": "mt-explorer-debug",
+    "storage_bucket": "mt-explorer-debug.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1234567890:android:abcdef1234567890",
+        "android_client_info": {
+          "package_name": "com.aistudio.mtexplorer.kzpflq"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaDebugKeyPlaceholder"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
