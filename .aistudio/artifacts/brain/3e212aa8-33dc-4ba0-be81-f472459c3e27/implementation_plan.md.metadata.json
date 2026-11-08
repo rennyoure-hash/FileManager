@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for MT Explorer, an advanced dual-pane Android file manager built from scratch featuring a unified FileSystem abstraction, dual-pane browsing, background task engine, and robust file management operations.",
+  "updatedAt":  "2026-11-08T11:44:00.582285648Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

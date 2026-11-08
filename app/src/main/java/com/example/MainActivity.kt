@@ -1,0 +1,150 @@
+package com.example
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.core.content.FileProvider
+import com.example.core.fs.VEntry
+import com.example.core.permission.PermissionManager
+import com.example.core.permission.PermissionRequestType
+import com.example.feature.browser.FileManagerViewModel
+import com.example.feature.browser.ui.BrowserScreen
+import com.example.ui.theme.MTExplorerTheme
+import java.io.File
+import java.util.ArrayList
+
+class MainActivity : ComponentActivity() {
+
+    private val viewModel: FileManagerViewModel by viewModels()
+
+    private val manageAllFilesLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.updatePermissionStatus()
+    }
+
+    private val legacyPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        viewModel.updatePermissionStatus()
+    }
+
+    private val openDocumentTreeLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val persisted = PermissionManager.persistDocumentTreeUri(this, uri)
+            if (persisted) {
+                Toast.makeText(this, "Folder access granted via SAF", Toast.LENGTH_SHORT).show()
+            }
+            viewModel.updatePermissionStatus()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        setContent {
+            MTExplorerTheme {
+                BrowserScreen(
+                    viewModel = viewModel,
+                    onRequestPermission = { requestStoragePermission() },
+                    onRequestSafFallback = { requestSafFallback() },
+                    onOpenFile = { entry -> openFileWithExternalApp(entry) },
+                    onShareFile = { entries -> shareFiles(entries) }
+                )
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.updatePermissionStatus()
+    }
+
+    private fun requestStoragePermission() {
+        when (PermissionManager.getRecommendedRequestType()) {
+            PermissionRequestType.MANAGE_ALL_FILES -> {
+                manageAllFilesLauncher.launch(PermissionManager.createManageAllFilesIntent(this))
+            }
+            PermissionRequestType.LEGACY_STORAGE -> {
+                legacyPermissionLauncher.launch(PermissionManager.getLegacyPermissions())
+            }
+            PermissionRequestType.STORAGE_ACCESS_FRAMEWORK -> {
+                openDocumentTreeLauncher.launch(null)
+            }
+        }
+    }
+
+    private fun requestSafFallback() {
+        openDocumentTreeLauncher.launch(null)
+    }
+
+    private fun openFileWithExternalApp(entry: VEntry) {
+        try {
+            val file = File(entry.path.normalized)
+            if (!file.exists()) {
+                Toast.makeText(this, "File does not exist", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val uri: Uri = FileProvider.getUriForFile(
+                this,
+                "$packageName.fileprovider",
+                file
+            )
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, entry.mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            startActivity(Intent.createChooser(intent, "Open with"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "Cannot open file: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun shareFiles(entries: List<VEntry>) {
+        if (entries.isEmpty()) return
+        try {
+            val files = entries.filter { !it.isDirectory }.map { File(it.path.normalized) }.filter { it.exists() }
+            if (files.isEmpty()) {
+                Toast.makeText(this, "No files to share", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            if (files.size == 1) {
+                val file = files.first()
+                val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = entries.first().mimeType
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(intent, "Share file"))
+            } else {
+                val uris = ArrayList<Uri>()
+                for (file in files) {
+                    uris.add(FileProvider.getUriForFile(this, "$packageName.fileprovider", file))
+                }
+                val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "*/*"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(intent, "Share ${files.size} files"))
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Cannot share: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+}

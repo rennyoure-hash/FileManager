@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Left folder pane (Pane A) -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M24,36h14l4,4h16c2.2,0 4,1.8 4,4v24c0,2.2 -1.8,4 -4,4H24c-2.2,0 -4,-1.8 -4,-4V40C20,37.8 21.8,36 24,36z" />
+    <!-- Right folder pane (Pane B) -->
+    <path
+        android:fillColor="#00D2FF"
+        android:pathData="M50,44h14l4,4h16c2.2,0 4,1.8 4,4v24c0,2.2 -1.8,4 -4,4H50c-2.2,0 -4,-1.8 -4,-4V48C46,45.8 47.8,44 50,44z" />
+    <!-- Dual transfer arrows -->
+    <!-- Arrow Right (Cyan/White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,58h14v-4l6,6 -6,6v-4H48z" />
+    <!-- Arrow Left (Teal) -->
+    <path
+        android:fillColor="#00F5D4"
+        android:pathData="M60,68H46v4l-6,-6 6,-6v4h14z" />
+</vector>

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MTExplorerFirestoreSchema",
+  "description": "Firestore schema for MT Explorer cloud sync, bookmarks, and user preferences",
+  "collections": {
+    "users/{userId}/bookmarks": {
+      "description": "User cloud-synced folder bookmarks",
+      "rules": {
+        "read": "request.auth != null && request.auth.uid == userId",
+        "write": "request.auth != null && request.auth.uid == userId"
+      },
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "name", "path"]
+    },
+    "users/{userId}/profile": {
+      "description": "User preferences and cloud sync settings",
+      "rules": {
+        "read": "request.auth != null && request.auth.uid == userId",
+        "write": "request.auth != null && request.auth.uid == userId"
+      },
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "showHidden": { "type": "boolean" },
+        "sortBy": { "type": "string" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["userId"]
+    }
+  }
+}

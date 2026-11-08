@@ -1,0 +1,6 @@
+{
+  "name": "MT Explorer",
+  "description": "Advanced dual-pane Android file manager with fast multi-selection, file operations, conflict handling, and storage access.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
