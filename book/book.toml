@@ -10,5 +10,4 @@ src = "src"
 build-dir = "book"
 
 [output.html]
-theme = "default"
 git-repository-url = "https://github.com/rennyoure-hash/FileManager"
