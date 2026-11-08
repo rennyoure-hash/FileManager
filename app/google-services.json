@@ -12,7 +12,20 @@
           "package_name": "com.aistudio.mtexplorer.kzpflq"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1234567890.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.mtexplorer.kzpflq",
+            "certificate_hash": "debugcertificatehashplaceholder"
+          }
+        },
+        {
+          "client_id": "1234567890-webclientid.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaDebugKeyPlaceholder"
