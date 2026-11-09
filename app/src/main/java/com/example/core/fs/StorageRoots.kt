@@ -2,6 +2,7 @@ package com.example.core.fs
 
 import android.content.Context
 import android.os.Environment
+import com.example.core.permission.PermissionManager
 import java.io.File
 
 data class StorageRoot(
@@ -83,7 +84,30 @@ object StorageRoots {
         } catch (_: Exception) {
         }
 
-        // 3. Fallback app internal storage if nothing else
+        // 3. Storage Access Framework (SAF) Granted Directories
+        try {
+            val safUris = PermissionManager.getPersistedSafUris(context)
+            for (safUri in safUris) {
+                val info = PermissionManager.getSafDirectoryInfo(context, safUri)
+                val safPath = VPath("saf://${info.encodedPath}")
+                val isDuplicate = list.any { it.path == safPath }
+                if (!isDuplicate) {
+                    list.add(
+                        StorageRoot(
+                            title = "SAF: ${info.name}",
+                            path = safPath,
+                            isPrimary = false,
+                            isRemovable = true,
+                            totalSpace = 0L,
+                            freeSpace = 0L
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        // 4. Fallback app internal storage if nothing else
         val appFiles = context.filesDir
         if (list.isEmpty() && appFiles != null) {
             list.add(

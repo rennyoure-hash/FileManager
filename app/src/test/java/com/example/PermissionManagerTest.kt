@@ -58,4 +58,38 @@ class PermissionManagerTest {
         val tier = PermissionManager.getStorageAccessTier(context)
         assertNotNull(tier)
     }
+
+    @Test
+    fun testSafUriEncodingAndDecoding() {
+        val originalUri = android.net.Uri.parse("content://com.android.externalstorage.documents/tree/primary%3ADownload")
+        val encoded = PermissionManager.encodeSafUri(originalUri)
+        val decoded = PermissionManager.decodeSafUri(encoded)
+        assertEquals(originalUri, decoded)
+    }
+
+    @Test
+    fun testSafDirectoryInfo() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val testUri = android.net.Uri.parse("content://com.android.externalstorage.documents/tree/primary%3ADownload")
+        val info = PermissionManager.getSafDirectoryInfo(context, testUri)
+        assertNotNull(info)
+        assertNotNull(info.name)
+        assertTrue(info.name.isNotEmpty())
+        assertEquals(testUri, info.uri)
+    }
+
+    @Test
+    fun testSafPersistAndRevoke() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val testUri = android.net.Uri.parse("content://com.android.externalstorage.documents/tree/primary%3APictures")
+
+        PermissionManager.persistDocumentTreeUri(context, testUri)
+        val uris = PermissionManager.getPersistedSafUris(context)
+        assertTrue(uris.contains(testUri))
+        assertTrue(PermissionManager.hasSafAccess(context))
+
+        PermissionManager.revokeSafAccess(context, testUri)
+        val afterRevoke = PermissionManager.getPersistedSafUris(context)
+        assertTrue(!afterRevoke.contains(testUri))
+    }
 }

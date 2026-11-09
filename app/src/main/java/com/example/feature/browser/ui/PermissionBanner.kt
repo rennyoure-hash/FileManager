@@ -107,7 +107,7 @@ fun PermissionBanner(
                         .testTag("btn_saf_fallback")
                 ) {
                     Text(
-                        text = "SAF Fallback",
+                        text = "Grant Folder (SAF)",
                         color = CyanAccent,
                         fontSize = 12.sp
                     )

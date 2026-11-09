@@ -1,7 +1,10 @@
 package com.example.feature.browser.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,10 +15,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudDone
@@ -23,13 +29,19 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.ui.draw.clip
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Folder
+import android.net.Uri
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.IconButton
 import com.example.core.firebase.CloudBookmark
+import com.example.core.permission.SafDirectoryInfo
 import com.google.firebase.auth.FirebaseUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -448,6 +460,9 @@ fun StorageRootsSheet(
     quickLocations: List<Pair<String, VPath>>,
     currentUser: FirebaseUser?,
     cloudBookmarks: List<CloudBookmark>,
+    safDirectories: List<SafDirectoryInfo> = emptyList(),
+    onRequestSafFolder: () -> Unit = {},
+    onRevokeSafAccess: (Uri) -> Unit = {},
     onSignInGoogle: () -> Unit,
     onSignOut: () -> Unit,
     onAddCurrentBookmark: () -> Unit,
@@ -595,6 +610,105 @@ fun StorageRootsSheet(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
+            // Storage Access Framework (SAF) Section
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.FolderShared,
+                        contentDescription = null,
+                        tint = CyanAccent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Storage Access Framework",
+                        color = CyanAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        onRequestSafFolder()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                    modifier = Modifier.testTag("btn_grant_new_saf_folder")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Grant Folder",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Text(
+                text = "Grant read and write permissions for local storage folders or SD cards via Android SAF.",
+                color = TextMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+
+            if (safDirectories.isNotEmpty()) {
+                safDirectories.forEach { saf ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelectLocation(VPath("saf://${saf.encodedPath}"))
+                                onDismiss()
+                            }
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderShared,
+                            contentDescription = null,
+                            tint = CyanAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(saf.name, color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text(
+                                text = "Read: ${if (saf.canRead) "Yes" else "No"} | Write: ${if (saf.canWrite) "Yes" else "No"}",
+                                color = if (saf.canWrite) CyanAccent else TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                        IconButton(
+                            onClick = { onRevokeSafAccess(saf.uri) },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .testTag("btn_revoke_saf_${saf.name}")
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Revoke SAF permission", tint = TextMuted, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = DarkSurfaceHighlight)
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
                 text = "Storage Roots",
                 color = TextPrimary,
@@ -667,3 +781,199 @@ fun StorageRootsSheet(
         }
     }
 }
+
+@Composable
+fun UserProfileDialog(
+    user: FirebaseUser?,
+    bookmarkCount: Int,
+    onSignOut: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    tint = CyanAccent,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Google Account",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // User Avatar
+                if (user?.photoUrl != null) {
+                    AsyncImage(
+                        model = user.photoUrl,
+                        contentDescription = "Profile picture",
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, CyanAccent, CircleShape)
+                    )
+                } else {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(DarkSurfaceElevated)
+                            .border(2.dp, CyanAccent, CircleShape)
+                    ) {
+                        val initial = user?.displayName?.firstOrNull()?.toString()
+                            ?: user?.email?.firstOrNull()?.toString()
+                            ?: "G"
+                        Text(
+                            text = initial.uppercase(),
+                            color = CyanAccent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 30.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // User Display Name
+                Text(
+                    text = user?.displayName ?: "Google User",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+
+                // User Email
+                Text(
+                    text = user?.email ?: "Verified Account",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Verification Badge Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DarkSurfaceElevated),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, CyanAccent.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Verified",
+                            tint = CyanAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Verified Google Authentication",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "Secured with Jetpack Credential Manager",
+                                color = TextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Cloud Sync info Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDone,
+                            contentDescription = null,
+                            tint = CyanAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Firebase Cloud Bookmarks",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "$bookmarkCount folder bookmark(s) active",
+                                color = TextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Sign Out Button
+                Button(
+                    onClick = onSignOut,
+                    colors = ButtonDefaults.buttonColors(containerColor = DangerCrimson.copy(alpha = 0.9f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("btn_profile_sign_out")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExitToApp,
+                        contentDescription = "Sign out",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Sign Out",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("btn_close_profile")
+            ) {
+                Text("Close", color = CyanAccent)
+            }
+        }
+    )
+}
+

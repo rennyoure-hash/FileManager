@@ -6,20 +6,24 @@ import android.os.Build
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.Activity
+import android.net.Uri
+import com.example.core.firebase.AuthManager
+import com.example.core.firebase.CloudBookmark
+import com.example.core.firebase.CloudRepository
+import com.example.core.fs.CompositeFileSystem
 import com.example.core.fs.LocalFileSystem
+import com.example.core.fs.SafFileSystem
 import com.example.core.fs.StorageRoot
 import com.example.core.fs.StorageRoots
 import com.example.core.fs.VEntry
 import com.example.core.fs.VPath
 import com.example.core.permission.PermissionManager
+import com.example.core.permission.SafDirectoryInfo
 import com.example.core.permission.StorageAccessTier
 import com.example.core.tasks.ConflictAction
 import com.example.core.tasks.TaskEngine
 import com.example.core.tasks.TaskProgress
-import android.app.Activity
-import com.example.core.firebase.AuthManager
-import com.example.core.firebase.CloudBookmark
-import com.example.core.firebase.CloudRepository
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,12 +36,17 @@ import java.util.Locale
 
 class FileManagerViewModel(application: Application) : AndroidViewModel(application) {
 
-    val fileSystem = LocalFileSystem()
+    val localFileSystem = LocalFileSystem()
+    val safFileSystem = SafFileSystem(application)
+    val fileSystem = CompositeFileSystem(localFileSystem, safFileSystem)
     val taskEngine = TaskEngine(viewModelScope)
     val taskProgress: StateFlow<TaskProgress?> = taskEngine.currentTask
 
     private val _storageRoots = MutableStateFlow<List<StorageRoot>>(emptyList())
     val storageRoots: StateFlow<List<StorageRoot>> = _storageRoots.asStateFlow()
+
+    private val _safDirectories = MutableStateFlow<List<SafDirectoryInfo>>(emptyList())
+    val safDirectories: StateFlow<List<SafDirectoryInfo>> = _safDirectories.asStateFlow()
 
     private val _activePaneId = MutableStateFlow(PaneId.PANE_A)
     val activePaneId: StateFlow<PaneId> = _activePaneId.asStateFlow()
@@ -136,6 +145,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         _storageAccessTier.value = tier
         val granted = tier != StorageAccessTier.NONE
         _hasStoragePermission.value = granted
+        refreshSafDirectories()
         if (granted) {
             refreshStorageRoots()
             refreshPane(PaneId.PANE_A)
@@ -143,10 +153,38 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun refreshSafDirectories() {
+        viewModelScope.launch {
+            val uris = PermissionManager.getPersistedSafUris(getApplication())
+            val list = uris.map { PermissionManager.getSafDirectoryInfo(getApplication(), it) }
+            _safDirectories.value = list
+        }
+    }
+
+    fun onSafFolderGranted(uri: Uri) {
+        val success = PermissionManager.persistDocumentTreeUri(getApplication(), uri)
+        if (success) {
+            updatePermissionStatus()
+            refreshSafDirectories()
+            refreshStorageRoots()
+            val info = PermissionManager.getSafDirectoryInfo(getApplication(), uri)
+            val safPath = VPath("saf://${info.encodedPath}")
+            navigateTo(_activePaneId.value, safPath)
+        }
+    }
+
+    fun revokeSafAccess(uri: Uri) {
+        PermissionManager.revokeSafAccess(getApplication(), uri)
+        updatePermissionStatus()
+        refreshSafDirectories()
+        refreshStorageRoots()
+    }
+
     fun refreshStorageRoots() {
         viewModelScope.launch {
             val roots = StorageRoots.getRoots(getApplication())
             _storageRoots.value = roots
+            refreshSafDirectories()
         }
     }
 
@@ -450,19 +488,19 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                 var size = 0L
                 var files = 0
                 var folders = 0
-                val stack = ArrayDeque<File>()
-                stack.add(File(target.path.normalized))
+                val stack = ArrayDeque<VPath>()
+                stack.add(target.path)
 
                 while (stack.isNotEmpty()) {
                     val dir = stack.removeFirst()
-                    val children = dir.listFiles() ?: continue
+                    val children = try { fileSystem.list(dir) } catch (_: Exception) { emptyList() }
                     for (child in children) {
                         if (child.isDirectory) {
                             folders++
-                            stack.add(child)
+                            stack.add(child.path)
                         } else {
                             files++
-                            size += child.length()
+                            size += child.size
                         }
                     }
                 }
