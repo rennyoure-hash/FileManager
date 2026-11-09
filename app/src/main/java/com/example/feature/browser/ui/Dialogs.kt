@@ -494,3 +494,129 @@ fun UserProfileDialog(
         }
     )
 }
+
+/**
+ * Compliance rationale dialog before requesting MANAGE_EXTERNAL_STORAGE.
+ * Informs the user of the core file manager capabilities requiring broad storage access
+ * in accordance with Google Play Developer Program policies.
+ */
+@Composable
+fun StorageAccessRationaleDialog(
+    onConfirmSettings: () -> Unit,
+    onChooseSaf: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn),
+        icon = {
+            Icon(
+                imageVector = Icons.Default.FolderShared,
+                contentDescription = null,
+                tint = CyanAccent,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Storage Access & Policy Compliance",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "MT Explorer is a full-featured dual-pane file manager designed for browsing, copying, moving, archiving, and editing files across device storage and external SD cards.",
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+                Text(
+                    text = "In compliance with Android and Google Play policies for file manager apps, full file management requires the 'All Files Access' (MANAGE_EXTERNAL_STORAGE) permission.\n\nYou can enable this in system Settings, or choose to grant access to a specific folder only using the Storage Access Framework (SAF).",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirmSettings,
+                colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                modifier = Modifier.testTag("rationale_btn_open_settings")
+            ) {
+                Text("Open Settings", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    onClick = onChooseSaf,
+                    modifier = Modifier.testTag("rationale_btn_use_saf")
+                ) {
+                    Text("Use SAF Folder", color = CyanAccent)
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("rationale_btn_not_now")
+                ) {
+                    Text("Not Now")
+                }
+            }
+        }
+    )
+}
+
+/**
+ * Follow-up dialog offered when MANAGE_EXTERNAL_STORAGE was denied or cancelled in Settings.
+ * Guides the user to pick an individual folder using Storage Access Framework (SAF).
+ */
+@Composable
+fun SafFallbackOfferDialog(
+    onChooseSaf: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn),
+        icon = {
+            Icon(
+                imageVector = Icons.Default.FolderOpen,
+                contentDescription = null,
+                tint = ConflictAmber,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Grant Folder Access (SAF)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Text(
+                text = "All Files Access was not enabled. You can still manage files inside specific folders (such as Downloads, Documents, or SD cards) by granting access via the Android Storage Access Framework (SAF).",
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onChooseSaf,
+                colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                modifier = Modifier.testTag("saf_fallback_btn_pick_folder")
+            ) {
+                Text("Select Folder", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("saf_fallback_btn_cancel")
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}

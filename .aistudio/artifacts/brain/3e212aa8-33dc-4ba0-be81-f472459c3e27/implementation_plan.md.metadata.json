@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for mandatory Google Sign-In verification in MT Explorer, adding a branded authentication gate before file access, Credential Manager integration, and seamless session persistence.",
-  "updatedAt":  "2026-11-09T03:29:58.639757415Z",
+  "summary":  "Plan for implementing the MANAGE_EXTERNAL_STORAGE permission flow in compliance with Google Play / Android Storage Access policies, featuring an educational compliance rationale dialog before opening system settings and an automatic SAF (Storage Access Framework) fallback when denied.",
+  "updatedAt":  "2026-11-09T14:38:38.127193067Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

@@ -21,6 +21,8 @@ import com.example.core.fs.VPath
 import com.example.core.permission.PermissionManager
 import com.example.core.permission.SafDirectoryInfo
 import com.example.core.permission.StorageAccessTier
+import com.example.core.permission.StoragePermissionManager
+import com.example.core.permission.StoragePermissionUiState
 import com.example.core.tasks.ConflictAction
 import com.example.core.tasks.TaskEngine
 import com.example.core.tasks.TaskProgress
@@ -35,6 +37,9 @@ import java.io.File
 import java.util.Locale
 
 class FileManagerViewModel(application: Application) : AndroidViewModel(application) {
+
+    val storagePermissionManager = StoragePermissionManager(application)
+    val permissionUiState: StateFlow<StoragePermissionUiState> = storagePermissionManager.uiState
 
     val localFileSystem = LocalFileSystem()
     val safFileSystem = SafFileSystem(application)
@@ -124,6 +129,32 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _pendingSystemDelete = MutableStateFlow<PendingSystemDelete?>(null)
     val pendingSystemDelete: StateFlow<PendingSystemDelete?> = _pendingSystemDelete.asStateFlow()
+
+    private val _showStorageRationaleDialog = MutableStateFlow(false)
+    val showStorageRationaleDialog: StateFlow<Boolean> = _showStorageRationaleDialog.asStateFlow()
+
+    private val _showSafFallbackDialog = MutableStateFlow(false)
+    val showSafFallbackDialog: StateFlow<Boolean> = _showSafFallbackDialog.asStateFlow()
+
+    fun showStorageRationale() {
+        storagePermissionManager.promptRationaleDialog()
+        _showStorageRationaleDialog.value = true
+    }
+
+    fun dismissStorageRationale() {
+        storagePermissionManager.dismissRationaleDialog()
+        _showStorageRationaleDialog.value = false
+    }
+
+    fun showSafFallbackPrompt() {
+        storagePermissionManager.promptSafFallback()
+        _showSafFallbackDialog.value = true
+    }
+
+    fun dismissSafFallbackPrompt() {
+        storagePermissionManager.dismissSafFallback()
+        _showSafFallbackDialog.value = false
+    }
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -253,6 +284,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun updatePermissionStatus() {
         viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<Application>()
+            storagePermissionManager.refreshState()
             val tier = PermissionManager.getStorageAccessTier(app)
             val rootEnabled = com.example.core.root.RootManager.isRootExplorerEnabled(app)
             val granted = tier != StorageAccessTier.NONE || rootEnabled

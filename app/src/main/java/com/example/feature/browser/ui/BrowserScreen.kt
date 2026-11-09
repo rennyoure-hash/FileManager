@@ -89,6 +89,7 @@ fun BrowserScreen(
     onOpenFile: (VEntry) -> Unit,
     onShareFile: (List<VEntry>) -> Unit,
     onOpenTools: (() -> Unit)? = null,
+    onLaunchSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -108,6 +109,8 @@ fun BrowserScreen(
     val mountTable by viewModel.mountTable.collectAsState()
     val pendingSensitiveOp by viewModel.pendingSensitiveOp.collectAsState()
     val pendingSystemDelete by viewModel.pendingSystemDelete.collectAsState()
+    val showStorageRationaleDialog by viewModel.showStorageRationaleDialog.collectAsState()
+    val showSafFallbackDialog by viewModel.showSafFallbackDialog.collectAsState()
 
     val activeState = if (activePaneId == PaneId.PANE_A) paneAState else paneBState
     val activeMountEntry = remember(activeState.currentPath.normalized, mountTable) {
@@ -775,6 +778,36 @@ fun BrowserScreen(
         ShellErrorAlertDialog(
             errorMessage = errText,
             onDismiss = { viewModel.clearLastShellError() }
+        )
+    }
+
+    // Google Play Storage Policy: MANAGE_EXTERNAL_STORAGE Rationale Dialog
+    if (showStorageRationaleDialog) {
+        StorageAccessRationaleDialog(
+            onConfirmSettings = {
+                viewModel.dismissStorageRationale()
+                if (onLaunchSettings != null) {
+                    onLaunchSettings()
+                } else {
+                    onRequestPermission()
+                }
+            },
+            onChooseSaf = {
+                viewModel.dismissStorageRationale()
+                onRequestSafFallback()
+            },
+            onDismiss = { viewModel.dismissStorageRationale() }
+        )
+    }
+
+    // SAF Fallback offer dialog if All Files Access was denied
+    if (showSafFallbackDialog) {
+        SafFallbackOfferDialog(
+            onChooseSaf = {
+                viewModel.dismissSafFallbackPrompt()
+                onRequestSafFallback()
+            },
+            onDismiss = { viewModel.dismissSafFallbackPrompt() }
         )
     }
 }

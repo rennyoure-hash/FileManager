@@ -43,6 +43,15 @@ object PermissionManager {
     private const val KEY_SAF_URIS = "saf_tree_uris_set"
 
     /**
+     * Google Play Storage Policy Compliance Declaration:
+     * MT Explorer qualifies for the MANAGE_EXTERNAL_STORAGE permission under the
+     * "File managers" permitted core use-case category:
+     * - Enables broad browsing, searching, copying, moving, archiving, and editing
+     *   across device-wide storage and external SD cards.
+     */
+    const val PLAY_STORE_CORE_USE_CASE = "File managers"
+
+    /**
      * Checks if Android 11+ (API 30+) All Files Access permission is granted.
      */
     fun hasAllFilesAccess(): Boolean {

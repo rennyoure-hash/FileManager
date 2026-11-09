@@ -27,12 +27,19 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.updatePermissionStatus()
+        // Check if All Files Access was granted. If not, prompt the SAF fallback
+        if (!PermissionManager.hasAllFilesAccess() && !PermissionManager.hasSafAccess(this)) {
+            viewModel.showSafFallbackPrompt()
+        }
     }
 
     private val legacyPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         viewModel.updatePermissionStatus()
+        if (!PermissionManager.hasLegacyStoragePermission(this) && !PermissionManager.hasSafAccess(this)) {
+            viewModel.showSafFallbackPrompt()
+        }
     }
 
     private val openDocumentTreeLauncher = registerForActivityResult(
@@ -59,7 +66,13 @@ class MainActivity : ComponentActivity() {
                 // for cloud bookmarks; it lives in the storage-roots/profile sheet.
                 BrowserScreen(
                     viewModel = viewModel,
-                    onRequestPermission = { requestStoragePermission() },
+                    onRequestPermission = {
+                        // Compliance requirement: Show rationale dialog before redirecting to Settings
+                        viewModel.showStorageRationale()
+                    },
+                    onLaunchSettings = {
+                        launchSystemPermissionSettings()
+                    },
                     onRequestSafFallback = { requestSafFallback() },
                     onOpenFile = { entry -> openFileWithExternalApp(entry) },
                     onShareFile = { entries -> shareFiles(entries) },
@@ -78,7 +91,7 @@ class MainActivity : ComponentActivity() {
         viewModel.updatePermissionStatus()
     }
 
-    private fun requestStoragePermission() {
+    private fun launchSystemPermissionSettings() {
         when (PermissionManager.getRecommendedRequestType()) {
             PermissionRequestType.MANAGE_ALL_FILES -> {
                 manageAllFilesLauncher.launch(PermissionManager.createManageAllFilesIntent(this))

@@ -37,5 +37,10 @@
     <string name="dialog_confirm">Confirm</string>
     <string name="empty_folder">Empty Folder</string>
     <string name="no_search_results">No matching files found</string>
-    <string name="default_web_client_id">1234567890-webclientid.apps.googleusercontent.com</string>
+    <string name="permission_compliance_title">Storage Access &amp; Compliance</string>
+    <string name="permission_compliance_rationale">MT Explorer is a comprehensive file manager designed for browsing, copying, moving, archiving, and editing files across internal storage and SD cards.\n\nIn accordance with Google Play storage policies, full device file management requires the \'All Files Access\' (MANAGE_EXTERNAL_STORAGE) permission. You can enable this in system Settings, or choose to grant access to a specific folder only using the Storage Access Framework (SAF).</string>
+    <string name="permission_open_settings">Open Settings</string>
+    <string name="permission_use_saf">Use Specific Folder (SAF)</string>
+    <string name="permission_not_now">Not Now</string>
+    <string name="permission_saf_fallback_prompt">All Files Access was not granted. Would you like to select a specific folder via the Storage Access Framework (SAF) instead?</string>
 </resources>

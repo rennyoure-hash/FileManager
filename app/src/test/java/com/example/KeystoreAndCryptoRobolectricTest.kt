@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -118,5 +119,35 @@ class KeystoreAndCryptoRobolectricTest {
         shadowKeyguard.setIsDeviceSecure(true)
         val secureStatus = BiometricVaultAuthenticator.checkDeviceSecurity(context)
         assertTrue(secureStatus.isDeviceLockScreenSecure)
+    }
+
+    @Test
+    fun robolectric_storagePermissionManager_encapsulatesAllFilesAccessAndSafFallbackState() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val manager = com.example.core.permission.StoragePermissionManager(context)
+
+        // 1. Initial State
+        val initialState = manager.uiState.value
+        assertNotNull(initialState)
+        assertFalse(initialState.showRationaleDialog)
+        assertFalse(initialState.showSafFallbackOffer)
+
+        // 2. Prompt rationale
+        manager.promptRationaleDialog()
+        assertTrue(manager.uiState.value.showRationaleDialog)
+
+        manager.dismissRationaleDialog()
+        assertFalse(manager.uiState.value.showRationaleDialog)
+
+        // 3. Prompt SAF fallback offer
+        manager.promptSafFallback()
+        assertTrue(manager.uiState.value.showSafFallbackOffer)
+
+        manager.dismissSafFallback()
+        assertFalse(manager.uiState.value.showSafFallbackOffer)
+
+        // 4. Permission result returned without full storage access -> triggers SAF fallback offer
+        val afterReturn = manager.onPermissionResultReturned()
+        assertTrue(afterReturn.showSafFallbackOffer)
     }
 }
