@@ -92,4 +92,39 @@ class PermissionManagerTest {
         val afterRevoke = PermissionManager.getPersistedSafUris(context)
         assertTrue(!afterRevoke.contains(testUri))
     }
+
+    @Test
+    fun testRootExplorerEnableAndStorageRoots() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        com.example.core.root.RootManager.setRootExplorerEnabled(context, false)
+        assertTrue(!com.example.core.root.RootManager.isRootExplorerEnabled(context))
+
+        com.example.core.root.RootManager.setRootExplorerEnabled(context, true)
+        assertTrue(com.example.core.root.RootManager.isRootExplorerEnabled(context))
+
+        val roots = com.example.core.fs.StorageRoots.getRoots(context)
+        assertTrue(roots.any { it.path.normalized == "/" && it.title.contains("Root") })
+
+        com.example.core.root.RootManager.setRootExplorerEnabled(context, false)
+    }
+
+    @Test
+    fun testRootFileSystemLsOutputParsing() {
+        val rootFs = com.example.core.fs.RootFileSystem()
+        val lines = listOf(
+            "total 32",
+            "drwxr-xr-x  4 root root 4096 2025-01-01 12:00 app",
+            "-rw-r--r--  1 root root 1842 2025-01-01 12:00 build.prop",
+            "lrwxrwxrwx  1 root root   11 2025-01-01 12:00 bin -> /system/bin"
+        )
+        val parsed = rootFs.parseLsOutput(com.example.core.fs.VPath("/system"), lines)
+        assertEquals(3, parsed.size)
+        assertEquals("app", parsed[0].name)
+        assertTrue(parsed[0].isDirectory)
+        assertEquals("build.prop", parsed[1].name)
+        assertTrue(!parsed[1].isDirectory)
+        assertEquals(1842L, parsed[1].size)
+        assertEquals("bin", parsed[2].name)
+        assertTrue(parsed[2].isDirectory)
+    }
 }

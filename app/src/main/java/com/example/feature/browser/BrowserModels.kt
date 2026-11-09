@@ -49,38 +49,37 @@ data class PaneState(
     val sortOrder: SortOrder = SortOrder.ASCENDING,
     val showHidden: Boolean = false
 ) {
-    val displayedEntries: List<VEntry>
-        get() {
-            var list = rawEntries
+    val displayedEntries: List<VEntry> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        var list = rawEntries
 
-            // Filter hidden
-            if (!showHidden) {
-                list = list.filter { !it.isHidden }
-            }
+        // Filter hidden
+        if (!showHidden) {
+            list = list.filter { !it.isHidden }
+        }
 
-            // Filter search
-            if (searchQuery.isNotBlank()) {
-                val query = searchQuery.trim().lowercase()
-                list = list.filter { it.name.lowercase().contains(query) }
-            }
+        // Filter search
+        if (searchQuery.isNotBlank()) {
+            val query = searchQuery.trim().lowercase()
+            list = list.filter { it.name.lowercase().contains(query) }
+        }
 
-            // Sort (directories always on top)
-            return list.sortedWith { a, b ->
-                if (a.isDirectory && !b.isDirectory) {
-                    -1
-                } else if (!a.isDirectory && b.isDirectory) {
-                    1
-                } else {
-                    val comp = when (sortBy) {
-                        SortBy.NAME -> a.name.compareTo(b.name, ignoreCase = true)
-                        SortBy.SIZE -> a.size.compareTo(b.size)
-                        SortBy.DATE -> a.lastModified.compareTo(b.lastModified)
-                        SortBy.TYPE -> a.extension.compareTo(b.extension, ignoreCase = true)
-                    }
-                    if (sortOrder == SortOrder.ASCENDING) comp else -comp
+        // Sort (directories always on top)
+        list.sortedWith { a, b ->
+            if (a.isDirectory && !b.isDirectory) {
+                -1
+            } else if (!a.isDirectory && b.isDirectory) {
+                1
+            } else {
+                val comp = when (sortBy) {
+                    SortBy.NAME -> a.name.compareTo(b.name, ignoreCase = true)
+                    SortBy.SIZE -> a.size.compareTo(b.size)
+                    SortBy.DATE -> a.lastModified.compareTo(b.lastModified)
+                    SortBy.TYPE -> a.extension.compareTo(b.extension, ignoreCase = true)
                 }
+                if (sortOrder == SortOrder.ASCENDING) comp else -comp
             }
         }
+    }
 
     val isSelectionMode: Boolean
         get() = selectedPaths.isNotEmpty()

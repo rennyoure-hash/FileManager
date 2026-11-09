@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Folder
@@ -90,6 +91,7 @@ fun BrowserScreen(
     onOpenTools: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val activePaneId by viewModel.activePaneId.collectAsState()
     val paneAState by viewModel.paneAState.collectAsState()
     val paneBState by viewModel.paneBState.collectAsState()
@@ -294,7 +296,7 @@ fun BrowserScreen(
                                     DropdownMenuItem(
                                         text = { Text("Tools", color = TextPrimary) },
                                         leadingIcon = {
-                                            Icon(Icons.Default.Settings, contentDescription = null, tint = CyanAccent)
+                                            Icon(Icons.Default.Build, contentDescription = null, tint = CyanAccent)
                                         },
                                         onClick = {
                                             showOverflowMenu = false
@@ -302,6 +304,21 @@ fun BrowserScreen(
                                         }
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text("Settings", color = TextPrimary) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Settings, contentDescription = null, tint = CyanAccent)
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        context.startActivity(
+                                            android.content.Intent(context, com.example.feature.tools.ToolsActivity::class.java).apply {
+                                                putExtra("tool", "SETTINGS")
+                                            }
+                                        )
+                                    },
+                                    modifier = Modifier.testTag("menu_item_settings")
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Sign Out", color = DangerCrimson) },
                                     leadingIcon = {
@@ -639,11 +656,11 @@ fun BrowserScreen(
         )
     }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val quickLocations = remember(context) { StorageRoots.getQuickLocations(context) }
     if (showStorageRootsSheet) {
         StorageRootsSheet(
             roots = storageRoots,
-            quickLocations = StorageRoots.getQuickLocations(context),
+            quickLocations = quickLocations,
             currentUser = currentUser,
             cloudBookmarks = cloudBookmarks,
             safDirectories = safDirectories,

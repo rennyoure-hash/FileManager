@@ -107,7 +107,38 @@ object StorageRoots {
         } catch (_: Exception) {
         }
 
-        // 4. Fallback app internal storage if nothing else
+        // 4. Root Explorer System Roots (when Root Explorer is enabled)
+        try {
+            if (com.example.core.root.RootManager.isRootExplorerEnabled(context)) {
+                val rootDir = File("/")
+                list.add(
+                    StorageRoot(
+                        title = "Root Directory (/)",
+                        path = VPath("/"),
+                        isPrimary = false,
+                        isRemovable = false,
+                        totalSpace = rootDir.totalSpace,
+                        freeSpace = rootDir.freeSpace
+                    )
+                )
+                val systemDir = File("/system")
+                if (systemDir.exists()) {
+                    list.add(
+                        StorageRoot(
+                            title = "System (/system)",
+                            path = VPath("/system"),
+                            isPrimary = false,
+                            isRemovable = false,
+                            totalSpace = systemDir.totalSpace,
+                            freeSpace = systemDir.freeSpace
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        // 5. Fallback app internal storage if nothing else
         val appFiles = context.filesDir
         if (list.isEmpty() && appFiles != null) {
             list.add(

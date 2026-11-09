@@ -1,11 +1,13 @@
 package com.example.core.fs
 
+import com.example.core.root.RootManager
 import java.io.InputStream
 import java.io.OutputStream
 
 class CompositeFileSystem(
     val localFs: LocalFileSystem,
-    val safFs: SafFileSystem
+    val safFs: SafFileSystem,
+    val rootFs: RootFileSystem = RootFileSystem(localFs)
 ) : FileSystem {
     override val id: String = "composite"
     override val name: String = "Storage System"
@@ -15,6 +17,8 @@ class CompositeFileSystem(
     fun getDelegate(path: VPath): FileSystem {
         return if (path.normalized.startsWith("saf:/") || path.rawPath.startsWith("saf:") || path.rawPath.startsWith("saf:/")) {
             safFs
+        } else if (RootManager.isRootExplorerEnabledFlow.value) {
+            rootFs
         } else {
             localFs
         }

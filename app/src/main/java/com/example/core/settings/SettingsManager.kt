@@ -26,6 +26,8 @@ object SettingsKeys {
     val REMOTE_PASSWORD = stringPreferencesKey("remote_password")
     val INTRO_SHOWN = booleanPreferencesKey("intro_shown")
     val BATCH_RENAME_HISTORY = stringPreferencesKey("batch_rename_history")
+    val ROOT_EXPLORER = booleanPreferencesKey("root_explorer")
+    val MOUNT_SYSTEM_RW = booleanPreferencesKey("mount_system_rw")
 }
 
 enum class AppTheme(val key: String) {
@@ -78,6 +80,28 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setEnableTrash(value: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.ENABLE_TRASH] = value }
+    }
+
+    suspend fun getRootExplorerEnabled(): Boolean {
+        val dsVal = context.settingsDataStore.data.map { it[SettingsKeys.ROOT_EXPLORER] }.first()
+        val enabled = dsVal ?: com.example.core.root.RootManager.isRootExplorerEnabled(context)
+        com.example.core.root.RootManager.setRootExplorerEnabled(context, enabled)
+        return enabled
+    }
+
+    suspend fun setRootExplorerEnabled(value: Boolean) {
+        com.example.core.root.RootManager.setRootExplorerEnabled(context, value)
+        context.settingsDataStore.edit { it[SettingsKeys.ROOT_EXPLORER] = value }
+    }
+
+    suspend fun getMountSystemRw(): Boolean {
+        val dsVal = context.settingsDataStore.data.map { it[SettingsKeys.MOUNT_SYSTEM_RW] }.first()
+        return dsVal ?: com.example.core.root.RootManager.isMountSystemRw(context)
+    }
+
+    suspend fun setMountSystemRw(value: Boolean) {
+        com.example.core.root.RootManager.setMountSystemRw(context, value)
+        context.settingsDataStore.edit { it[SettingsKeys.MOUNT_SYSTEM_RW] = value }
     }
 
     suspend fun getRemoteMgmtEnabled(): Boolean {

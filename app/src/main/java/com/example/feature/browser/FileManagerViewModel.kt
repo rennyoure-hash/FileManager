@@ -184,22 +184,35 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun updatePermissionStatus() {
-        val tier = PermissionManager.getStorageAccessTier(getApplication())
-        _storageAccessTier.value = tier
-        val granted = tier != StorageAccessTier.NONE
-        _hasStoragePermission.value = granted
-        refreshSafDirectories()
-        if (granted) {
-            refreshStorageRoots()
-            refreshPane(PaneId.PANE_A)
-            refreshPane(PaneId.PANE_B)
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val tier = PermissionManager.getStorageAccessTier(app)
+            val rootEnabled = com.example.core.root.RootManager.isRootExplorerEnabled(app)
+            val granted = tier != StorageAccessTier.NONE || rootEnabled
+            val prevGranted = _hasStoragePermission.value
+            val prevRootsCount = _storageRoots.value.size
+
+            _storageAccessTier.value = tier
+            _hasStoragePermission.value = granted
+
+            val roots = StorageRoots.getRoots(app)
+            _storageRoots.value = roots
+
+            val uris = PermissionManager.getPersistedSafUris(app)
+            _safDirectories.value = uris.map { PermissionManager.getSafDirectoryInfo(app, it) }
+
+            if (granted && (!prevGranted || roots.size != prevRootsCount)) {
+                refreshPane(PaneId.PANE_A)
+                refreshPane(PaneId.PANE_B)
+            }
         }
     }
 
     fun refreshSafDirectories() {
-        viewModelScope.launch {
-            val uris = PermissionManager.getPersistedSafUris(getApplication())
-            val list = uris.map { PermissionManager.getSafDirectoryInfo(getApplication(), it) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val uris = PermissionManager.getPersistedSafUris(app)
+            val list = uris.map { PermissionManager.getSafDirectoryInfo(app, it) }
             _safDirectories.value = list
         }
     }
@@ -208,8 +221,6 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val success = PermissionManager.persistDocumentTreeUri(getApplication(), uri)
         if (success) {
             updatePermissionStatus()
-            refreshSafDirectories()
-            refreshStorageRoots()
             val info = PermissionManager.getSafDirectoryInfo(getApplication(), uri)
             val safPath = VPath("saf://${info.encodedPath}")
             navigateTo(_activePaneId.value, safPath)
@@ -219,15 +230,15 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun revokeSafAccess(uri: Uri) {
         PermissionManager.revokeSafAccess(getApplication(), uri)
         updatePermissionStatus()
-        refreshSafDirectories()
-        refreshStorageRoots()
     }
 
     fun refreshStorageRoots() {
-        viewModelScope.launch {
-            val roots = StorageRoots.getRoots(getApplication())
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val roots = StorageRoots.getRoots(app)
             _storageRoots.value = roots
-            refreshSafDirectories()
+            val uris = PermissionManager.getPersistedSafUris(app)
+            _safDirectories.value = uris.map { PermissionManager.getSafDirectoryInfo(app, it) }
         }
     }
 
