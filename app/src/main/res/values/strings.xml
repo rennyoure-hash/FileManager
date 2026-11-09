@@ -37,4 +37,5 @@
     <string name="dialog_confirm">Confirm</string>
     <string name="empty_folder">Empty Folder</string>
     <string name="no_search_results">No matching files found</string>
+    <string name="default_web_client_id">1234567890-webclientid.apps.googleusercontent.com</string>
 </resources>
