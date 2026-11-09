@@ -146,7 +146,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun attemptAutoSignIn(activity: Activity? = null) {
-        authManager.attemptAutoSignIn(activity)
+        authManager.attemptAutoSignIn()
     }
 
     fun addCurrentPathToCloudBookmarks(paneId: PaneId) {
