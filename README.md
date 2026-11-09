@@ -58,6 +58,7 @@ MT Explorer is a native Android file manager that manages all files on your phon
 - Firestore cloud bookmarks (`CloudRepository.kt`)
 - SignInScreen with Material You (`SignInScreen.kt`)
 - Firebase is treated as optional at runtime: a missing/broken config disables cloud features instead of crashing the app
+- Real cloud sync needs a valid `app/google-services.json`; without it the app runs in offline mode
 
 ---
 

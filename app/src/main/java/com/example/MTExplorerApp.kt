@@ -9,8 +9,12 @@ class MTExplorerApp : Application() {
         super.onCreate()
         try {
             if (FirebaseApp.getApps(this).isEmpty()) {
-                FirebaseApp.initializeApp(this)
-                Log.d("MTExplorerApp", "FirebaseApp initialized successfully")
+                val app = FirebaseApp.initializeApp(this)
+                if (app != null) {
+                    Log.d("MTExplorerApp", "FirebaseApp initialized successfully")
+                } else {
+                    Log.w("MTExplorerApp", "No Firebase config found; cloud features disabled")
+                }
             }
         } catch (t: Throwable) {
             Log.e("MTExplorerApp", "FirebaseApp initialization error: ${t.message}", t)

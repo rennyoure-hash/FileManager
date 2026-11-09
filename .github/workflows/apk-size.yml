@@ -23,14 +23,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install Gradle
-        run: |
-          curl -L --retry 5 --retry-all-errors -o gradle.zip https://services.gradle.org/distributions/gradle-9.5.0-bin.zip
-          unzip -q gradle.zip
-          GRADLE_HOME="$PWD/gradle-9.5.0"
-          export PATH="$GRADLE_HOME/bin:$PATH"
-          gradle wrapper --gradle-version 9.5.0
-
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
