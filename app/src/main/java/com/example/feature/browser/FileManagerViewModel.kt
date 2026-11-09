@@ -54,7 +54,13 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     private val _paneAState = MutableStateFlow(
         PaneState(
             paneId = PaneId.PANE_A,
-            currentPath = VPath(Environment.getExternalStorageDirectory()?.absolutePath ?: "/storage/emulated/0")
+            currentPath = VPath(
+                try {
+                    Environment.getExternalStorageDirectory()?.absolutePath ?: "/storage/emulated/0"
+                } catch (_: Throwable) {
+                    "/storage/emulated/0"
+                }
+            )
         )
     )
     val paneAState: StateFlow<PaneState> = _paneAState.asStateFlow()
@@ -63,8 +69,12 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         PaneState(
             paneId = PaneId.PANE_B,
             currentPath = VPath(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)?.absolutePath
-                    ?: (Environment.getExternalStorageDirectory()?.absolutePath ?: "/storage/emulated/0")
+                try {
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)?.absolutePath
+                        ?: (Environment.getExternalStorageDirectory()?.absolutePath ?: "/storage/emulated/0")
+                } catch (_: Throwable) {
+                    "/storage/emulated/0"
+                }
             )
         )
     )
@@ -73,10 +83,22 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     private val _activeProperties = MutableStateFlow<PropertiesInfo?>(null)
     val activeProperties: StateFlow<PropertiesInfo?> = _activeProperties.asStateFlow()
 
-    private val _storageAccessTier = MutableStateFlow(PermissionManager.getStorageAccessTier(application))
+    private val _storageAccessTier = MutableStateFlow(
+        try {
+            PermissionManager.getStorageAccessTier(application)
+        } catch (_: Throwable) {
+            StorageAccessTier.NONE
+        }
+    )
     val storageAccessTier: StateFlow<StorageAccessTier> = _storageAccessTier.asStateFlow()
 
-    private val _hasStoragePermission = MutableStateFlow(PermissionManager.hasAnyStorageAccess(application))
+    private val _hasStoragePermission = MutableStateFlow(
+        try {
+            PermissionManager.hasAnyStorageAccess(application)
+        } catch (_: Throwable) {
+            false
+        }
+    )
     val hasStoragePermission: StateFlow<Boolean> = _hasStoragePermission.asStateFlow()
 
     val authManager = AuthManager(application, viewModelScope)
@@ -86,14 +108,20 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     val authLoading: StateFlow<Boolean> = authManager.isLoading
     val authError: StateFlow<String?> = authManager.authError
 
+    private val _guestMode = MutableStateFlow(false)
+    val isGuestMode: StateFlow<Boolean> = _guestMode.asStateFlow()
+
     private val _cloudBookmarks = MutableStateFlow<List<CloudBookmark>>(emptyList())
     val cloudBookmarks: StateFlow<List<CloudBookmark>> = _cloudBookmarks.asStateFlow()
 
     init {
-        refreshStorageRoots()
-        refreshPane(PaneId.PANE_A)
-        refreshPane(PaneId.PANE_B)
-        authManager.attemptAutoSignIn()
+        try {
+            refreshStorageRoots()
+            refreshPane(PaneId.PANE_A)
+            refreshPane(PaneId.PANE_B)
+        } catch (t: Throwable) {
+            android.util.Log.e("FileManagerViewModel", "Initial storage refresh error: ${t.message}", t)
+        }
 
         viewModelScope.launch {
             authManager.currentUser.collect { user ->
@@ -111,6 +139,14 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
         }
+    }
+
+    fun continueAsGuest() {
+        _guestMode.value = true
+    }
+
+    fun attemptAutoSignIn(activity: Activity? = null) {
+        authManager.attemptAutoSignIn(activity)
     }
 
     fun addCurrentPathToCloudBookmarks(paneId: PaneId) {

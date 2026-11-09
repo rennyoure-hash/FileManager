@@ -62,6 +62,7 @@ fun SignInScreen(
     isLoading: Boolean,
     errorMessage: String?,
     onSignInClicked: (Activity) -> Unit,
+    onContinueOffline: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -222,6 +223,28 @@ fun SignInScreen(
                             fontSize = 15.sp
                         )
                     }
+                }
+            }
+
+            if (onContinueOffline != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onContinueOffline,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = CyanAccent
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CyanAccent.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("btn_continue_offline")
+                ) {
+                    Text(
+                        text = "Lanjutkan Mode Offline (Tanpa Akun)",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp
+                    )
                 }
             }
 
