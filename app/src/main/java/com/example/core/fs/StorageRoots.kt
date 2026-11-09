@@ -3,7 +3,11 @@ package com.example.core.fs
 import android.content.Context
 import android.os.Environment
 import com.example.core.permission.PermissionManager
+import com.example.core.root.MountEntry
+import com.example.core.root.PartitionBadge
+import com.example.core.root.RootManager
 import java.io.File
+import java.util.Locale
 
 data class StorageRoot(
     val title: String,
@@ -11,14 +15,21 @@ data class StorageRoot(
     val isPrimary: Boolean = false,
     val isRemovable: Boolean = false,
     val totalSpace: Long = 0L,
-    val freeSpace: Long = 0L
+    val freeSpace: Long = 0L,
+    val mountEntry: MountEntry? = null
 ) {
+    val badge: PartitionBadge
+        get() = mountEntry?.badge ?: PartitionBadge.RW
+
+    val fsType: String
+        get() = mountEntry?.fsType ?: ""
+
     val formattedFreeSpace: String
         get() {
             if (freeSpace <= 0) return ""
             val gb = freeSpace.toDouble() / (1024 * 1024 * 1024)
             val totalGb = totalSpace.toDouble() / (1024 * 1024 * 1024)
-            return String.format("%.1f GB free of %.1f GB", gb, totalGb)
+            return String.format(Locale.US, "%.1f GB free of %.1f GB", gb, totalGb)
         }
 }
 
@@ -31,6 +42,7 @@ object StorageRoots {
         if (primaryDir != null && primaryDir.exists()) {
             val total = primaryDir.totalSpace
             val free = primaryDir.freeSpace
+            val mount = RootManager.getMountForPath(primaryDir.absolutePath)
             list.add(
                 StorageRoot(
                     title = "Internal Storage",
@@ -38,7 +50,8 @@ object StorageRoots {
                     isPrimary = true,
                     isRemovable = false,
                     totalSpace = total,
-                    freeSpace = free
+                    freeSpace = free,
+                    mountEntry = mount
                 )
             )
         } else {
@@ -51,7 +64,8 @@ object StorageRoots {
                         isPrimary = true,
                         isRemovable = false,
                         totalSpace = fallback.totalSpace,
-                        freeSpace = fallback.freeSpace
+                        freeSpace = fallback.freeSpace,
+                        mountEntry = RootManager.getMountForPath(fallback.absolutePath)
                     )
                 )
             }
@@ -74,7 +88,8 @@ object StorageRoots {
                                     isPrimary = false,
                                     isRemovable = true,
                                     totalSpace = root.totalSpace,
-                                    freeSpace = root.freeSpace
+                                    freeSpace = root.freeSpace,
+                                    mountEntry = RootManager.getMountForPath(pathStr)
                                 )
                             )
                         }
@@ -99,7 +114,13 @@ object StorageRoots {
                             isPrimary = false,
                             isRemovable = true,
                             totalSpace = 0L,
-                            freeSpace = 0L
+                            freeSpace = 0L,
+                            mountEntry = MountEntry(
+                                device = "saf",
+                                mountPoint = safPath.normalized,
+                                fsType = "documentfile",
+                                options = if (info.canWrite) listOf("rw") else listOf("ro")
+                            )
                         )
                     )
                 }
@@ -109,30 +130,28 @@ object StorageRoots {
 
         // 4. Root Explorer System Roots (when Root Explorer is enabled)
         try {
-            if (com.example.core.root.RootManager.isRootExplorerEnabled(context)) {
-                val rootDir = File("/")
-                list.add(
-                    StorageRoot(
-                        title = "Root Directory (/)",
-                        path = VPath("/"),
-                        isPrimary = false,
-                        isRemovable = false,
-                        totalSpace = rootDir.totalSpace,
-                        freeSpace = rootDir.freeSpace
-                    )
+            if (RootManager.isRootExplorerEnabled(context)) {
+                val systemRoots = listOf(
+                    "Root Directory (/)" to "/",
+                    "System (/system)" to "/system",
+                    "Vendor (/vendor)" to "/vendor",
+                    "Data (/data)" to "/data"
                 )
-                val systemDir = File("/system")
-                if (systemDir.exists()) {
-                    list.add(
-                        StorageRoot(
-                            title = "System (/system)",
-                            path = VPath("/system"),
-                            isPrimary = false,
-                            isRemovable = false,
-                            totalSpace = systemDir.totalSpace,
-                            freeSpace = systemDir.freeSpace
+                for ((title, rawPath) in systemRoots) {
+                    val dir = File(rawPath)
+                    if (rawPath == "/" || dir.exists()) {
+                        list.add(
+                            StorageRoot(
+                                title = title,
+                                path = VPath(rawPath),
+                                isPrimary = false,
+                                isRemovable = false,
+                                totalSpace = dir.totalSpace,
+                                freeSpace = dir.freeSpace,
+                                mountEntry = RootManager.getMountForPath(rawPath)
+                            )
                         )
-                    )
+                    }
                 }
             }
         } catch (_: Exception) {
@@ -147,7 +166,8 @@ object StorageRoots {
                     path = VPath(appFiles.absolutePath),
                     isPrimary = true,
                     totalSpace = appFiles.totalSpace,
-                    freeSpace = appFiles.freeSpace
+                    freeSpace = appFiles.freeSpace,
+                    mountEntry = RootManager.getMountForPath(appFiles.absolutePath)
                 )
             )
         }

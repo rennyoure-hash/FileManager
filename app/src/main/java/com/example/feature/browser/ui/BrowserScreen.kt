@@ -102,8 +102,22 @@ fun BrowserScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val cloudBookmarks by viewModel.cloudBookmarks.collectAsState()
     val safDirectories by viewModel.safDirectories.collectAsState()
+    val showRootUnavailableBanner by viewModel.showRootUnavailableBanner.collectAsState()
+    val latestRemountFailure by viewModel.latestRemountFailure.collectAsState()
+    val lastShellError by viewModel.lastShellError.collectAsState()
+    val mountTable by viewModel.mountTable.collectAsState()
+    val pendingSensitiveOp by viewModel.pendingSensitiveOp.collectAsState()
+    val pendingSystemDelete by viewModel.pendingSystemDelete.collectAsState()
 
     val activeState = if (activePaneId == PaneId.PANE_A) paneAState else paneBState
+    val activeMountEntry = remember(activeState.currentPath.normalized, mountTable) {
+        if (activeState.currentPath.normalized.startsWith("content://")) {
+            null
+        } else {
+            com.example.core.root.MountAnalyzer.findMountForPath(activeState.currentPath.normalized, mountTable)
+                ?: com.example.core.root.RootManager.getMountForPath(activeState.currentPath.normalized)
+        }
+    }
 
     // Dialog states
     var showNewItemDialog by remember { mutableStateOf(false) }
@@ -459,6 +473,23 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Startup banner when root is unavailable
+            if (showRootUnavailableBanner) {
+                RootUnavailableBanner(
+                    onDismiss = { viewModel.dismissRootUnavailableBanner() }
+                )
+            }
+
+            // Per-partition Mount R/W status bar & toggle for current active path
+            activeMountEntry?.let { entry ->
+                PartitionMountStatusBar(
+                    mountEntry = entry,
+                    onToggleMountRw = { targetEntry ->
+                        viewModel.toggleMountRwForPath(targetEntry.mountPoint)
+                    }
+                )
+            }
+
             // Permission notification banner if not yet granted
             if (!hasStoragePermission) {
                 PermissionBanner(
@@ -675,6 +706,9 @@ fun BrowserScreen(
             onAddCurrentBookmark = { viewModel.addCurrentPathToCloudBookmarks(activePaneId) },
             onDeleteBookmark = { bookmarkId -> viewModel.removeCloudBookmark(bookmarkId) },
             onSelectLocation = { viewModel.navigateTo(activePaneId, it) },
+            onToggleRootMountRw = { root ->
+                viewModel.toggleMountRwForPath(root.mountEntry?.mountPoint ?: root.path.normalized)
+            },
             onDismiss = { showStorageRootsSheet = false }
         )
     }
@@ -705,6 +739,42 @@ fun BrowserScreen(
                 viewModel.signOut()
             },
             onDismiss = { showProfileDialog = false }
+        )
+    }
+
+    // Remount Failure BottomSheet (Diagnosis + Magisk/OverlayFS info + Stay Read-Only)
+    latestRemountFailure?.let { diagnosis ->
+        RemountFailureBottomSheet(
+            diagnosis = diagnosis,
+            onDismiss = { viewModel.clearRemountFailure() }
+        )
+    }
+
+    // Sensitive System Path Write Confirmation Dialog
+    pendingSensitiveOp?.let { pendingOp ->
+        SensitiveWriteConfirmDialog(
+            targetPath = pendingOp.targetPath,
+            operationName = pendingOp.operationName,
+            onConfirm = { pendingOp.onConfirmed() },
+            onDismiss = { viewModel.dismissSensitiveOp() }
+        )
+    }
+
+    // System Area Delete Backup Offer Dialog
+    pendingSystemDelete?.let { sysDel ->
+        SystemDeleteBackupDialog(
+            targetPath = sysDel.targetPath,
+            onBackupAndDelete = { sysDel.onExecuteDelete(true) },
+            onDeleteWithoutBackup = { sysDel.onExecuteDelete(false) },
+            onDismiss = { viewModel.dismissSystemDelete() }
+        )
+    }
+
+    // Shell stderr / command failure dialog
+    lastShellError?.let { errText ->
+        ShellErrorAlertDialog(
+            errorMessage = errText,
+            onDismiss = { viewModel.clearLastShellError() }
         )
     }
 }

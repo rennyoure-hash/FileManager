@@ -1,5 +1,7 @@
 package com.example.core.fs
 
+import com.example.core.root.MountAnalyzer
+import com.example.core.root.RootCommandResult
 import com.example.core.root.RootManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -33,8 +35,8 @@ class RootFileSystem(
             }
         }
 
-        val quoted = RootManager.shellQuote(path.normalized)
-        val result = RootManager.executeCommand("ls -la $quoted")
+        val quoted = MountAnalyzer.escapeShellPath(path.normalized)
+        val result = RootManager.executeCommand("ls -la $quoted", reportErrorToUi = false)
         if (!result.isSuccess) {
             return@withContext localFs.list(path)
         }
@@ -91,8 +93,8 @@ class RootFileSystem(
             localFs.stat(path)?.let { return@withContext it }
         }
 
-        val quoted = RootManager.shellQuote(path.normalized)
-        val result = RootManager.executeCommand("stat -c '%F|%s|%Y' $quoted")
+        val quoted = MountAnalyzer.escapeShellPath(path.normalized)
+        val result = RootManager.executeCommand("stat -c '%F|%s|%Y' $quoted", reportErrorToUi = false)
         if (!result.isSuccess || result.stdout.isEmpty()) {
             return@withContext localFs.stat(path)
         }
@@ -121,7 +123,7 @@ class RootFileSystem(
         if (file.exists() && file.canRead()) {
             return localFs.openRead(path, offset)
         }
-        val quoted = RootManager.shellQuote(path.normalized)
+        val quoted = MountAnalyzer.escapeShellPath(path.normalized)
         val cmd = if (offset > 0) {
             "tail -c +${offset + 1} $quoted"
         } else {
@@ -135,22 +137,21 @@ class RootFileSystem(
     }
 
     override fun openWrite(path: VPath, append: Boolean): OutputStream {
-        val file = File(path.normalized)
-        val parent = file.parentFile
-        if ((file.exists() && file.canWrite()) || (parent != null && parent.exists() && parent.canWrite())) {
-            return localFs.openWrite(path, append)
-        }
-
         return object : ByteArrayOutputStream() {
             override fun close() {
                 super.close()
+                val bytes = toByteArray()
                 val tempFile = File.createTempFile("mt_root_write_", ".tmp")
                 try {
-                    tempFile.writeBytes(toByteArray())
-                    val srcQuoted = RootManager.shellQuote(tempFile.absolutePath)
-                    val dstQuoted = RootManager.shellQuote(path.normalized)
+                    tempFile.writeBytes(bytes)
+                    val srcQuoted = MountAnalyzer.escapeShellPath(tempFile.absolutePath)
+                    val dstQuoted = MountAnalyzer.escapeShellPath(path.normalized)
                     val op = if (append) "cat $srcQuoted >> $dstQuoted" else "cp -f $srcQuoted $dstQuoted"
-                    val res = runBlocking { RootManager.executeCommand(op) }
+                    val res = runBlocking {
+                        RootManager.withWritableMount(path.normalized) {
+                            RootManager.executeCommand(op)
+                        }
+                    }
                     if (!res.isSuccess) {
                         throw IOException("Root write failed for ${path.normalized}: ${res.errorText}")
                     }
@@ -162,31 +163,44 @@ class RootFileSystem(
     }
 
     override suspend fun mkdir(path: VPath): Boolean = withContext(Dispatchers.IO) {
-        if (localFs.mkdir(path)) return@withContext true
-        val quoted = RootManager.shellQuote(path.normalized)
-        RootManager.executeCommand("mkdir -p $quoted").isSuccess
+        RootManager.rootMkdir(path.normalized).isSuccess
     }
 
     override suspend fun rename(from: VPath, to: VPath): Boolean = withContext(Dispatchers.IO) {
-        if (localFs.rename(from, to)) return@withContext true
-        val srcQuoted = RootManager.shellQuote(from.normalized)
-        val dstQuoted = RootManager.shellQuote(to.normalized)
-        RootManager.executeCommand("mv -f $srcQuoted $dstQuoted").isSuccess
+        RootManager.rootRename(from.normalized, to.normalized).isSuccess
     }
 
     override suspend fun delete(path: VPath, recursive: Boolean): Boolean = withContext(Dispatchers.IO) {
-        val file = File(path.normalized)
-        if (file.exists() && file.canWrite() && localFs.delete(path, recursive)) {
-            return@withContext true
+        if (MountAnalyzer.isBlockedDirectDeletePath(path.normalized)) {
+            RootManager.rootDelete(path.normalized, recursive)
+            return@withContext false
         }
-        val quoted = RootManager.shellQuote(path.normalized)
-        val flag = if (recursive) "-rf" else "-f"
-        RootManager.executeCommand("rm $flag $quoted").isSuccess
+        RootManager.rootDelete(path.normalized, recursive).isSuccess
     }
 
     override suspend fun exists(path: VPath): Boolean = withContext(Dispatchers.IO) {
         if (localFs.exists(path)) return@withContext true
-        val quoted = RootManager.shellQuote(path.normalized)
-        RootManager.executeCommand("test -e $quoted").isSuccess
+        val quoted = MountAnalyzer.escapeShellPath(path.normalized)
+        RootManager.executeCommand("stat $quoted", reportErrorToUi = false).isSuccess
+    }
+
+    suspend fun copy(source: VPath, target: VPath): RootCommandResult = withContext(Dispatchers.IO) {
+        RootManager.rootCopy(source.normalized, target.normalized)
+    }
+
+    suspend fun move(source: VPath, target: VPath): RootCommandResult = withContext(Dispatchers.IO) {
+        RootManager.rootMove(source.normalized, target.normalized)
+    }
+
+    suspend fun touch(path: VPath): RootCommandResult = withContext(Dispatchers.IO) {
+        RootManager.rootTouch(path.normalized)
+    }
+
+    suspend fun chmod(path: VPath, modeOctal: String, recursive: Boolean = false): RootCommandResult = withContext(Dispatchers.IO) {
+        RootManager.rootChmod(path.normalized, modeOctal, recursive)
+    }
+
+    suspend fun chown(path: VPath, ownerGroup: String, recursive: Boolean = false): RootCommandResult = withContext(Dispatchers.IO) {
+        RootManager.rootChown(path.normalized, ownerGroup, recursive)
     }
 }

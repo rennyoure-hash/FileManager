@@ -114,13 +114,31 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     private val _cloudBookmarks = MutableStateFlow<List<CloudBookmark>>(emptyList())
     val cloudBookmarks: StateFlow<List<CloudBookmark>> = _cloudBookmarks.asStateFlow()
 
+    val showRootUnavailableBanner: StateFlow<Boolean> = com.example.core.root.RootManager.showRootUnavailableBanner
+    val latestRemountFailure: StateFlow<com.example.core.root.RemountFailureDiagnosis?> = com.example.core.root.RootManager.latestRemountFailure
+    val lastShellError: StateFlow<String?> = com.example.core.root.RootManager.lastShellError
+    val mountTable: StateFlow<List<com.example.core.root.MountEntry>> = com.example.core.root.RootManager.mountTable
+
+    private val _pendingSensitiveOp = MutableStateFlow<PendingSensitiveOperation?>(null)
+    val pendingSensitiveOp: StateFlow<PendingSensitiveOperation?> = _pendingSensitiveOp.asStateFlow()
+
+    private val _pendingSystemDelete = MutableStateFlow<PendingSystemDelete?>(null)
+    val pendingSystemDelete: StateFlow<PendingSystemDelete?> = _pendingSystemDelete.asStateFlow()
+
     init {
-        try {
-            refreshStorageRoots()
-            refreshPane(PaneId.PANE_A)
-            refreshPane(PaneId.PANE_B)
-        } catch (t: Throwable) {
-            android.util.Log.e("FileManagerViewModel", "Initial storage refresh error: ${t.message}", t)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.example.core.root.RootManager.initializeAndCheckStartupRoot(getApplication())
+            } catch (t: Throwable) {
+                android.util.Log.w("FileManagerViewModel", "Startup root check warning: ${t.message}")
+            }
+            try {
+                refreshStorageRoots()
+                refreshPane(PaneId.PANE_A)
+                refreshPane(PaneId.PANE_B)
+            } catch (t: Throwable) {
+                android.util.Log.e("FileManagerViewModel", "Initial storage refresh error: ${t.message}", t)
+            }
         }
 
         viewModelScope.launch {
@@ -138,6 +156,55 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
                     _cloudBookmarks.value = emptyList()
                 }
             }
+        }
+    }
+
+    fun dismissRootUnavailableBanner() {
+        com.example.core.root.RootManager.dismissRootUnavailableBanner()
+    }
+
+    fun clearRemountFailure() {
+        com.example.core.root.RootManager.clearRemountFailure()
+    }
+
+    fun clearLastShellError() {
+        com.example.core.root.RootManager.clearLastShellError()
+    }
+
+    fun dismissSensitiveOp() {
+        _pendingSensitiveOp.value = null
+    }
+
+    fun dismissSystemDelete() {
+        _pendingSystemDelete.value = null
+    }
+
+    fun toggleMountRwForPath(targetPath: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentMount = com.example.core.root.RootManager.getMountForPath(targetPath)
+            val targetWritable = currentMount?.isRw != true
+            com.example.core.root.RootManager.remountPath(
+                targetPathOrMountPoint = currentMount?.mountPoint ?: targetPath,
+                writable = targetWritable,
+                pinnedByUser = true
+            )
+            refreshStorageRoots()
+        }
+    }
+
+    private fun guardSensitiveWrite(targetPath: String, operationName: String, action: () -> Unit) {
+        val ownPkg = getApplication<Application>().packageName
+        if (com.example.core.root.MountAnalyzer.isSensitiveWritePath(targetPath, ownPkg)) {
+            _pendingSensitiveOp.value = PendingSensitiveOperation(
+                targetPath = targetPath,
+                operationName = operationName,
+                onConfirmed = {
+                    _pendingSensitiveOp.value = null
+                    action()
+                }
+            )
+        } else {
+            action()
         }
     }
 
@@ -413,10 +480,14 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
         val newPath = current.currentPath.resolve(trimmed)
 
-        viewModelScope.launch {
-            val success = fileSystem.mkdir(newPath)
-            if (success) {
-                refreshPane(paneId)
+        guardSensitiveWrite(newPath.normalized, "Buat Folder") {
+            viewModelScope.launch(Dispatchers.IO) {
+                val success = fileSystem.mkdir(newPath)
+                    || (com.example.core.root.RootManager.isRootExplorerEnabled(getApplication())
+                        && com.example.core.root.RootManager.rootMkdir(newPath.normalized).isSuccess)
+                if (success) {
+                    refreshPane(paneId)
+                }
             }
         }
     }
@@ -427,49 +498,93 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
         val newPath = current.currentPath.resolve(trimmed)
 
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                fileSystem.openWrite(newPath, append = false).use {
-                    it.write(ByteArray(0))
+        guardSensitiveWrite(newPath.normalized, "Buat File (touch)") {
+            viewModelScope.launch(Dispatchers.IO) {
+                var created = false
+                try {
+                    fileSystem.openWrite(newPath, append = false).use {
+                        it.write(ByteArray(0))
+                    }
+                    created = true
+                } catch (_: Exception) {
+                    if (com.example.core.root.RootManager.isRootExplorerEnabled(getApplication())) {
+                        created = com.example.core.root.RootManager.rootTouch(newPath.normalized).isSuccess
+                    }
                 }
-                refreshPane(paneId)
-            } catch (_: Exception) {}
+                if (created) {
+                    refreshPane(paneId)
+                }
+            }
         }
     }
 
     fun renameItem(paneId: PaneId, entry: VEntry, newName: String) {
         val trimmed = newName.trim()
         if (trimmed.isEmpty() || trimmed == entry.name) return
+        val destPath = entry.path.parent?.resolve(trimmed)?.normalized ?: entry.path.normalized
 
-        viewModelScope.launch {
-            val success = com.example.core.fs.DocumentFileOperations.rename(getApplication(), entry.path, trimmed)
-                || (entry.path.parent?.let { fileSystem.rename(entry.path, it.resolve(trimmed)) } == true)
-            if (success) {
-                clearSelection(paneId)
-                refreshPane(paneId)
-                val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
-                val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
-                val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
-                if (other.currentPath == current.currentPath) {
-                    refreshPane(otherPaneId)
+        guardSensitiveWrite(destPath, "Rename (${entry.name} -> $trimmed)") {
+            viewModelScope.launch(Dispatchers.IO) {
+                val success = com.example.core.fs.DocumentFileOperations.rename(getApplication(), entry.path, trimmed)
+                    || (entry.path.parent?.let { fileSystem.rename(entry.path, it.resolve(trimmed)) } == true)
+                    || (com.example.core.root.RootManager.isRootExplorerEnabled(getApplication())
+                        && com.example.core.root.RootManager.rootRename(entry.path.normalized, destPath).isSuccess)
+                if (success) {
+                    clearSelection(paneId)
+                    refreshPane(paneId)
+                    val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
+                    val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                    val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                    if (other.currentPath == current.currentPath) {
+                        refreshPane(otherPaneId)
+                    }
                 }
             }
         }
     }
 
     fun deleteSingleItem(paneId: PaneId, entry: VEntry) {
-        viewModelScope.launch {
-            val success = com.example.core.fs.DocumentFileOperations.delete(getApplication(), entry.path)
-                || fileSystem.delete(entry.path, recursive = true)
-            if (success) {
-                clearSelection(paneId)
-                refreshPane(paneId)
-                val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
-                val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
-                val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
-                if (other.currentPath == current.currentPath) {
-                    refreshPane(otherPaneId)
+        val normPath = entry.path.normalized
+        if (com.example.core.root.MountAnalyzer.isBlockedDirectDeletePath(normPath)) {
+            viewModelScope.launch(Dispatchers.IO) {
+                com.example.core.root.RootManager.rootDelete(normPath, recursive = true)
+            }
+            return
+        }
+
+        val executeDelete: (Boolean) -> Unit = { backupFirst ->
+            viewModelScope.launch(Dispatchers.IO) {
+                if (backupFirst) {
+                    com.example.core.root.RootManager.backupSystemItemToStorage(normPath)
                 }
+                val success = com.example.core.fs.DocumentFileOperations.delete(getApplication(), entry.path)
+                    || fileSystem.delete(entry.path, recursive = true)
+                    || (com.example.core.root.RootManager.isRootExplorerEnabled(getApplication())
+                        && com.example.core.root.RootManager.rootDelete(normPath, recursive = true).isSuccess)
+                if (success) {
+                    clearSelection(paneId)
+                    refreshPane(paneId)
+                    val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
+                    val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                    val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                    if (other.currentPath == current.currentPath) {
+                        refreshPane(otherPaneId)
+                    }
+                }
+            }
+        }
+
+        if (com.example.core.root.MountAnalyzer.isSystemAreaForBackup(normPath)) {
+            _pendingSystemDelete.value = PendingSystemDelete(
+                targetPath = normPath,
+                onExecuteDelete = { backupFirst ->
+                    _pendingSystemDelete.value = null
+                    executeDelete(backupFirst)
+                }
+            )
+        } else {
+            guardSensitiveWrite(normPath, "Hapus (${entry.name})") {
+                executeDelete(false)
             }
         }
     }
@@ -477,25 +592,36 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun copySingleToOtherPane(sourcePaneId: PaneId, entry: VEntry) {
         val targetPaneId = if (sourcePaneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
         val targetState = if (targetPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+        val destFilePath = targetState.currentPath.resolve(entry.name).normalized
 
-        viewModelScope.launch {
-            val docCopied = com.example.core.fs.DocumentFileOperations.copy(
-                getApplication(),
-                entry.path,
-                targetState.currentPath
-            )
-            if (docCopied) {
-                clearSelection(sourcePaneId)
-                refreshPane(targetPaneId)
-            } else {
-                taskEngine.startCopy(
-                    sources = listOf(entry),
-                    targetDir = targetState.currentPath,
-                    sourceFs = fileSystem,
-                    targetFs = fileSystem
-                ) {
+        guardSensitiveWrite(destFilePath, "Salin (${entry.name})") {
+            viewModelScope.launch(Dispatchers.IO) {
+                val docCopied = com.example.core.fs.DocumentFileOperations.copy(
+                    getApplication(),
+                    entry.path,
+                    targetState.currentPath
+                )
+                if (docCopied) {
                     clearSelection(sourcePaneId)
                     refreshPane(targetPaneId)
+                } else if (com.example.core.root.RootManager.isRootExplorerEnabled(getApplication())
+                    && com.example.core.root.MountAnalyzer.isSensitiveWritePath(destFilePath, getApplication<Application>().packageName)
+                ) {
+                    val res = com.example.core.root.RootManager.rootCopy(entry.path.normalized, destFilePath)
+                    if (res.isSuccess) {
+                        clearSelection(sourcePaneId)
+                        refreshPane(targetPaneId)
+                    }
+                } else {
+                    taskEngine.startCopy(
+                        sources = listOf(entry),
+                        targetDir = targetState.currentPath,
+                        sourceFs = fileSystem,
+                        targetFs = fileSystem
+                    ) {
+                        clearSelection(sourcePaneId)
+                        refreshPane(targetPaneId)
+                    }
                 }
             }
         }
@@ -504,27 +630,40 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun moveSingleToOtherPane(sourcePaneId: PaneId, entry: VEntry) {
         val targetPaneId = if (sourcePaneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
         val targetState = if (targetPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+        val destFilePath = targetState.currentPath.resolve(entry.name).normalized
 
-        viewModelScope.launch {
-            val docMoved = com.example.core.fs.DocumentFileOperations.move(
-                getApplication(),
-                entry.path,
-                targetState.currentPath
-            )
-            if (docMoved) {
-                clearSelection(sourcePaneId)
-                refreshPane(sourcePaneId)
-                refreshPane(targetPaneId)
-            } else {
-                taskEngine.startMove(
-                    sources = listOf(entry),
-                    targetDir = targetState.currentPath,
-                    sourceFs = fileSystem,
-                    targetFs = fileSystem
-                ) {
+        guardSensitiveWrite(destFilePath, "Pindah (${entry.name})") {
+            viewModelScope.launch(Dispatchers.IO) {
+                val docMoved = com.example.core.fs.DocumentFileOperations.move(
+                    getApplication(),
+                    entry.path,
+                    targetState.currentPath
+                )
+                if (docMoved) {
                     clearSelection(sourcePaneId)
                     refreshPane(sourcePaneId)
                     refreshPane(targetPaneId)
+                } else if (com.example.core.root.RootManager.isRootExplorerEnabled(getApplication())
+                    && (com.example.core.root.MountAnalyzer.isSensitiveWritePath(destFilePath, getApplication<Application>().packageName)
+                        || com.example.core.root.MountAnalyzer.isSensitiveWritePath(entry.path.normalized, getApplication<Application>().packageName))
+                ) {
+                    val res = com.example.core.root.RootManager.rootMove(entry.path.normalized, destFilePath)
+                    if (res.isSuccess) {
+                        clearSelection(sourcePaneId)
+                        refreshPane(sourcePaneId)
+                        refreshPane(targetPaneId)
+                    }
+                } else {
+                    taskEngine.startMove(
+                        sources = listOf(entry),
+                        targetDir = targetState.currentPath,
+                        sourceFs = fileSystem,
+                        targetFs = fileSystem
+                    ) {
+                        clearSelection(sourcePaneId)
+                        refreshPane(sourcePaneId)
+                        refreshPane(targetPaneId)
+                    }
                 }
             }
         }
@@ -535,14 +674,49 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val selectedEntries = current.rawEntries.filter { current.selectedPaths.contains(it.path) }
         if (selectedEntries.isEmpty()) return
 
-        taskEngine.startDelete(selectedEntries, fileSystem) {
-            clearSelection(paneId)
-            refreshPane(paneId)
-            // If the other pane is also viewing the same dir, refresh it too
-            val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
-            val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
-            if (other.currentPath == current.currentPath) {
-                refreshPane(otherPaneId)
+        val blocked = selectedEntries.firstOrNull {
+            com.example.core.root.MountAnalyzer.isBlockedDirectDeletePath(it.path.normalized)
+        }
+        if (blocked != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                com.example.core.root.RootManager.rootDelete(blocked.path.normalized, recursive = true)
+            }
+            return
+        }
+
+        val runDelete: (Boolean) -> Unit = { backupFirst ->
+            viewModelScope.launch(Dispatchers.IO) {
+                if (backupFirst) {
+                    for (item in selectedEntries) {
+                        com.example.core.root.RootManager.backupSystemItemToStorage(item.path.normalized)
+                    }
+                }
+                taskEngine.startDelete(selectedEntries, fileSystem) {
+                    clearSelection(paneId)
+                    refreshPane(paneId)
+                    val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
+                    val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                    if (other.currentPath == current.currentPath) {
+                        refreshPane(otherPaneId)
+                    }
+                }
+            }
+        }
+
+        val firstSystemItem = selectedEntries.firstOrNull {
+            com.example.core.root.MountAnalyzer.isSystemAreaForBackup(it.path.normalized)
+        }
+        if (firstSystemItem != null) {
+            _pendingSystemDelete.value = PendingSystemDelete(
+                targetPath = "${firstSystemItem.path.normalized} (${selectedEntries.size} item)",
+                onExecuteDelete = { backupFirst ->
+                    _pendingSystemDelete.value = null
+                    runDelete(backupFirst)
+                }
+            )
+        } else {
+            guardSensitiveWrite(current.currentPath.normalized, "Hapus (${selectedEntries.size} item)") {
+                runDelete(false)
             }
         }
     }
@@ -557,14 +731,16 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val selectedEntries = sourceState.rawEntries.filter { sourceState.selectedPaths.contains(it.path) }
         if (selectedEntries.isEmpty()) return
 
-        taskEngine.startCopy(
-            sources = selectedEntries,
-            targetDir = targetState.currentPath,
-            sourceFs = fileSystem,
-            targetFs = fileSystem
-        ) {
-            clearSelection(sourcePaneId)
-            refreshPane(targetPaneId)
+        guardSensitiveWrite(targetState.currentPath.normalized, "Salin (${selectedEntries.size} item)") {
+            taskEngine.startCopy(
+                sources = selectedEntries,
+                targetDir = targetState.currentPath,
+                sourceFs = fileSystem,
+                targetFs = fileSystem
+            ) {
+                clearSelection(sourcePaneId)
+                refreshPane(targetPaneId)
+            }
         }
     }
 
@@ -578,15 +754,17 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
         val selectedEntries = sourceState.rawEntries.filter { sourceState.selectedPaths.contains(it.path) }
         if (selectedEntries.isEmpty()) return
 
-        taskEngine.startMove(
-            sources = selectedEntries,
-            targetDir = targetState.currentPath,
-            sourceFs = fileSystem,
-            targetFs = fileSystem
-        ) {
-            clearSelection(sourcePaneId)
-            refreshPane(sourcePaneId)
-            refreshPane(targetPaneId)
+        guardSensitiveWrite(targetState.currentPath.normalized, "Pindah (${selectedEntries.size} item)") {
+            taskEngine.startMove(
+                sources = selectedEntries,
+                targetDir = targetState.currentPath,
+                sourceFs = fileSystem,
+                targetFs = fileSystem
+            ) {
+                clearSelection(sourcePaneId)
+                refreshPane(sourcePaneId)
+                refreshPane(targetPaneId)
+            }
         }
     }
 

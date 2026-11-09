@@ -23,7 +23,6 @@ object SettingsKeys {
     val SORT_ORDER = stringPreferencesKey("sort_order")
     val ENABLE_TRASH = booleanPreferencesKey("enable_trash")
     val ALLOW_REMOTE_MGMT = booleanPreferencesKey("allow_remote_mgmt")
-    val REMOTE_PASSWORD = stringPreferencesKey("remote_password")
     val INTRO_SHOWN = booleanPreferencesKey("intro_shown")
     val BATCH_RENAME_HISTORY = stringPreferencesKey("batch_rename_history")
     val ROOT_EXPLORER = booleanPreferencesKey("root_explorer")

@@ -63,6 +63,9 @@ fun SettingsScreen(
         val result = pendingFallbackResult!!
         AlertDialog(
             onDismissRequest = { pendingFallbackResult = null },
+            properties = androidx.compose.ui.window.DialogProperties(
+                securePolicy = androidx.compose.ui.window.SecureFlagPolicy.SecureOn
+            ),
             icon = {
                 Icon(
                     imageVector = Icons.Default.Security,

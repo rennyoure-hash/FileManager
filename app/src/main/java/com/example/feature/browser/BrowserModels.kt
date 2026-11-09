@@ -87,3 +87,14 @@ data class PaneState(
     val selectedCount: Int
         get() = selectedPaths.size
 }
+
+data class PendingSensitiveOperation(
+    val targetPath: String,
+    val operationName: String,
+    val onConfirmed: () -> Unit
+)
+
+data class PendingSystemDelete(
+    val targetPath: String,
+    val onExecuteDelete: (backupFirst: Boolean) -> Unit
+)

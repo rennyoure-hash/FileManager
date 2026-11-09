@@ -95,6 +95,7 @@ dependencies {
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.biometric)
   // implementation(libs.androidx.camera.camera2)
   // implementation(libs.androidx.camera.core)
   // implementation(libs.androidx.camera.lifecycle)
@@ -149,3 +150,22 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+// Fase 8b.8: Detekt & OWASP Dependency-Check configuration tasks (Configuration-Cache safe)
+val verificationXmlFile = rootProject.file("gradle/verification-metadata.xml")
+val detektYmlFile = rootProject.file("config/detekt/detekt.yml")
+val owaspXmlFile = rootProject.file("config/owasp/dependency-check-suppression.xml")
+
+tasks.register("verifySecurityToolingConfig") {
+  group = "verification"
+  description = "Verifies Gradle dependency verification metadata, Detekt config, and OWASP Dependency-Check config."
+  val vFile = verificationXmlFile
+  val dFile = detektYmlFile
+  val oFile = owaspXmlFile
+  doLast {
+    check(vFile.exists()) { "Missing gradle/verification-metadata.xml" }
+    check(dFile.exists()) { "Missing config/detekt/detekt.yml" }
+    check(oFile.exists()) { "Missing config/owasp/dependency-check-suppression.xml" }
+  }
+}
+
