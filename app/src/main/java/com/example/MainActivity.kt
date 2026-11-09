@@ -58,7 +58,12 @@ class MainActivity : ComponentActivity() {
                     onRequestPermission = { requestStoragePermission() },
                     onRequestSafFallback = { requestSafFallback() },
                     onOpenFile = { entry -> openFileWithExternalApp(entry) },
-                    onShareFile = { entries -> shareFiles(entries) }
+                    onShareFile = { entries -> shareFiles(entries) },
+                    onOpenTools = {
+                        startActivity(Intent(this@MainActivity, com.example.feature.tools.ToolsActivity::class.java).apply {
+                            putExtra("tool", "HUB")
+                        })
+                    }
                 )
             }
         }
@@ -88,13 +93,61 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openFileWithExternalApp(entry: VEntry) {
-        try {
-            val file = File(entry.path.normalized)
-            if (!file.exists()) {
-                Toast.makeText(this, "File does not exist", Toast.LENGTH_SHORT).show()
-                return
-            }
+        val file = File(entry.path.normalized)
+        if (!file.exists()) {
+            Toast.makeText(this, "File does not exist", Toast.LENGTH_SHORT).show()
+            return
+        }
 
+        // Internal viewers for supported types
+        val ext = file.extension.lowercase()
+        val internalIntent = when (ext) {
+            "txt", "md", "log", "java", "kt", "py", "json", "xml", "css", "js", "ts", "sh", "c", "cpp", "h", "gradle", "yml", "yaml", "properties" -> {
+                Intent(this, com.example.feature.viewer.ViewerActivity::class.java).apply {
+                    putExtra("feature", "TEXT")
+                    putExtra("path", file.absolutePath)
+                }
+            }
+            "bin", "dat" -> {
+                Intent(this, com.example.feature.viewer.ViewerActivity::class.java).apply {
+                    putExtra("feature", "HEX")
+                    putExtra("path", file.absolutePath)
+                }
+            }
+            "jpg", "jpeg", "png", "webp", "gif", "bmp" -> {
+                Intent(this, com.example.feature.viewer.ViewerActivity::class.java).apply {
+                    putExtra("feature", "IMAGE")
+                    putExtra("path", file.absolutePath)
+                    putExtra("files", arrayOf(file.absolutePath))
+                    putExtra("index", 0)
+                }
+            }
+            "mp4", "mkv", "avi", "mov", "webm", "mp3", "wav", "ogg", "flac", "m4a" -> {
+                Intent(this, com.example.feature.viewer.ViewerActivity::class.java).apply {
+                    putExtra("feature", "MEDIA")
+                    putExtra("path", file.absolutePath)
+                }
+            }
+            "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "zst", "tgz" -> {
+                Intent(this, com.example.feature.archive.ArchiveActivity::class.java).apply {
+                    putExtra("path", file.absolutePath)
+                }
+            }
+            "apk", "apks", "xapk" -> {
+                // Apk info via Tools
+                Intent(this, com.example.feature.tools.ToolsActivity::class.java).apply {
+                    putExtra("tool", "APPS")
+                }
+            }
+            else -> null
+        }
+
+        if (internalIntent != null) {
+            startActivity(internalIntent)
+            return
+        }
+
+        try {
             val uri: Uri = FileProvider.getUriForFile(
                 this,
                 "$packageName.fileprovider",

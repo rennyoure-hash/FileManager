@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -78,6 +79,7 @@ fun BrowserScreen(
     onRequestSafFallback: () -> Unit,
     onOpenFile: (VEntry) -> Unit,
     onShareFile: (List<VEntry>) -> Unit,
+    onOpenTools: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val activePaneId by viewModel.activePaneId.collectAsState()
@@ -221,6 +223,18 @@ fun BrowserScreen(
                                         showNewItemDialog = true
                                     }
                                 )
+                                if (onOpenTools != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Tools", color = TextPrimary) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Settings, contentDescription = null, tint = CyanAccent)
+                                        },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onOpenTools()
+                                        }
+                                    )
+                                }
                             }
 
                             // Sort submenu
