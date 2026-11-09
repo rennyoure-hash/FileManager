@@ -53,10 +53,11 @@ MT Explorer is a native Android file manager that manages all files on your phon
 - HTTP Remote Management — stub (disabled in UI until implemented)
 - S3 object storage — profile abstraction
 
-### Firebase & Auth
-- Google Sign-In via Credential Manager (`AuthManager.kt`)
+### Firebase & Auth (optional)
+- Google Sign-In via Credential Manager (`AuthManager.kt`) — only needed for cloud bookmarks; the file manager opens without an account
 - Firestore cloud bookmarks (`CloudRepository.kt`)
 - SignInScreen with Material You (`SignInScreen.kt`)
+- Firebase is treated as optional at runtime: a missing/broken config disables cloud features instead of crashing the app
 
 ---
 
@@ -70,6 +71,8 @@ MT Explorer is a native Android file manager that manages all files on your phon
 4. Transfer the APK to your Android device (`Download/` folder)
 5. Enable "Install from unknown sources" in your device settings
 6. Open the APK and tap Install
+
+> The file manager opens directly without an account. Google Sign-In is optional and only used for cloud bookmarks.
 
 > **Note:** If you get "App not installed" (signature mismatch), uninstall the previous version first:
 > `Settings → Apps → MT Explorer → Uninstall`
