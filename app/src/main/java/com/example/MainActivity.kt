@@ -9,13 +9,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
 import com.example.core.fs.VEntry
 import com.example.core.permission.PermissionManager
 import com.example.core.permission.PermissionRequestType
-import com.example.feature.auth.ui.SignInScreen
 import com.example.feature.browser.FileManagerViewModel
 import com.example.feature.browser.ui.BrowserScreen
 import com.example.ui.theme.MTExplorerTheme
@@ -58,32 +55,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MTExplorerTheme {
-                val currentUser by viewModel.currentUser.collectAsState()
-                val authLoading by viewModel.authLoading.collectAsState()
-                val authError by viewModel.authError.collectAsState()
-
-                if (currentUser == null) {
-                    SignInScreen(
-                        isLoading = authLoading,
-                        errorMessage = authError,
-                        onSignInClicked = { activity ->
-                            viewModel.signInWithGoogle(activity)
-                        }
-                    )
-                } else {
-                    BrowserScreen(
-                        viewModel = viewModel,
-                        onRequestPermission = { requestStoragePermission() },
-                        onRequestSafFallback = { requestSafFallback() },
-                        onOpenFile = { entry -> openFileWithExternalApp(entry) },
-                        onShareFile = { entries -> shareFiles(entries) },
-                        onOpenTools = {
-                            startActivity(Intent(this@MainActivity, com.example.feature.tools.ToolsActivity::class.java).apply {
-                                putExtra("tool", "HUB")
-                            })
-                        }
-                    )
-                }
+                // File manager opens directly. Google sign-in is optional and only needed
+                // for cloud bookmarks; it lives in the storage-roots/profile sheet.
+                BrowserScreen(
+                    viewModel = viewModel,
+                    onRequestPermission = { requestStoragePermission() },
+                    onRequestSafFallback = { requestSafFallback() },
+                    onOpenFile = { entry -> openFileWithExternalApp(entry) },
+                    onShareFile = { entries -> shareFiles(entries) },
+                    onOpenTools = {
+                        startActivity(Intent(this@MainActivity, com.example.feature.tools.ToolsActivity::class.java).apply {
+                            putExtra("tool", "HUB")
+                        })
+                    }
+                )
             }
         }
     }

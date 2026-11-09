@@ -21,6 +21,15 @@ class CloudRepository(val db: FirebaseFirestore) {
         )
     )
 
+    companion object {
+        /** Returns null when Firebase is unavailable (e.g. missing google-services.json). */
+        fun createOrNull(context: Context): CloudRepository? = runCatching {
+            CloudRepository(context)
+        }.onFailure {
+            android.util.Log.w("CloudRepository", "Firestore unavailable; cloud sync disabled", it)
+        }.getOrNull()
+    }
+
     fun observeBookmarks(userId: String): Flow<List<CloudBookmark>> {
         val collection = db.collection("users").document(userId).collection("bookmarks")
         return collection.snapshots().map { snapshot ->

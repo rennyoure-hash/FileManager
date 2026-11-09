@@ -80,7 +80,7 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     val hasStoragePermission: StateFlow<Boolean> = _hasStoragePermission.asStateFlow()
 
     val authManager = AuthManager(application, viewModelScope)
-    val cloudRepository = CloudRepository(application)
+    val cloudRepository: CloudRepository? = CloudRepository.createOrNull(application)
 
     val currentUser: StateFlow<FirebaseUser?> = authManager.currentUser
     val authLoading: StateFlow<Boolean> = authManager.isLoading
@@ -97,9 +97,14 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
         viewModelScope.launch {
             authManager.currentUser.collect { user ->
-                if (user != null) {
-                    cloudRepository.observeBookmarks(user.uid).collect { bookmarks ->
-                        _cloudBookmarks.value = bookmarks
+                val repo = cloudRepository
+                if (user != null && repo != null) {
+                    try {
+                        repo.observeBookmarks(user.uid).collect { bookmarks ->
+                            _cloudBookmarks.value = bookmarks
+                        }
+                    } catch (_: Exception) {
+                        _cloudBookmarks.value = emptyList()
                     }
                 } else {
                     _cloudBookmarks.value = emptyList()
@@ -110,20 +115,22 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun addCurrentPathToCloudBookmarks(paneId: PaneId) {
         val user = authManager.currentUser.value ?: return
+        val repo = cloudRepository ?: return
         val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
         val name = current.currentPath.name.ifEmpty { "Root" }
         viewModelScope.launch {
             try {
-                cloudRepository.addBookmark(user.uid, name, current.currentPath.normalized)
+                repo.addBookmark(user.uid, name, current.currentPath.normalized)
             } catch (_: Exception) {}
         }
     }
 
     fun removeCloudBookmark(bookmarkId: String) {
         val user = authManager.currentUser.value ?: return
+        val repo = cloudRepository ?: return
         viewModelScope.launch {
             try {
-                cloudRepository.deleteBookmark(user.uid, bookmarkId)
+                repo.deleteBookmark(user.uid, bookmarkId)
             } catch (_: Exception) {}
         }
     }

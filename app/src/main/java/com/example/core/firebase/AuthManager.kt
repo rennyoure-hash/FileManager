@@ -30,10 +30,16 @@ import kotlinx.coroutines.withContext
 
 class AuthManager(private val context: Context, private val scope: CoroutineScope) {
 
-    private val auth: FirebaseAuth = Firebase.auth
-    private val credentialManager = CredentialManager.create(context)
+    // Firebase is optional: a missing/invalid google-services.json must not crash the app.
+    private val auth: FirebaseAuth? = runCatching { Firebase.auth }
+        .onFailure { Log.e("Auth", "Firebase is not initialized; cloud features disabled", it) }
+        .getOrNull()
 
-    private val _currentUser = MutableStateFlow<FirebaseUser?>(auth.currentUser)
+    val isAvailable: Boolean get() = auth != null
+
+    private val credentialManager by lazy { CredentialManager.create(context) }
+
+    private val _currentUser = MutableStateFlow<FirebaseUser?>(auth?.currentUser)
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
 
     private val _authError = MutableStateFlow<String?>(null)
@@ -43,12 +49,13 @@ class AuthManager(private val context: Context, private val scope: CoroutineScop
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
-        auth.addAuthStateListener { firebaseAuth ->
+        auth?.addAuthStateListener { firebaseAuth ->
             _currentUser.value = firebaseAuth.currentUser
         }
     }
 
     fun attemptAutoSignIn() {
+        val auth = auth ?: return
         if (auth.currentUser != null) {
             _currentUser.value = auth.currentUser
             return
@@ -91,6 +98,14 @@ class AuthManager(private val context: Context, private val scope: CoroutineScop
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
+        val auth = auth
+        if (auth == null) {
+            val msg = "Cloud sync is unavailable: Firebase is not configured in this build"
+            _authError.value = msg
+            onError(msg)
+            return
+        }
+
         val clientId = try {
             context.getString(R.string.default_web_client_id)
         } catch (e: Exception) {
@@ -137,6 +152,7 @@ class AuthManager(private val context: Context, private val scope: CoroutineScop
     }
 
     fun signOut(onComplete: () -> Unit = {}) {
+        val auth = auth
         scope.launch {
             withContext(NonCancellable) {
                 try {
@@ -144,7 +160,7 @@ class AuthManager(private val context: Context, private val scope: CoroutineScop
                 } catch (e: Exception) {
                     Log.w("Auth", "Failed to clear credential state: ${e.message}")
                 } finally {
-                    auth.signOut()
+                    auth?.signOut()
                     _currentUser.value = null
                     onComplete()
                 }
