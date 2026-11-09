@@ -26,7 +26,7 @@ class InstalledAppsManager(private val packageManager: PackageManager) {
     suspend fun listInstalledApps(includeSystem: Boolean = false): List<InstalledApp> = withContext(Dispatchers.IO) {
         val packages = packageManager.getInstalledPackages(PackageManager.GET_META_DATA)
         packages.mapNotNull { info ->
-            val appInfo = info.applicationInfo
+            val appInfo = info.applicationInfo ?: return@mapNotNull null
             val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
             if (!includeSystem && isSystem) return@mapNotNull null
             val label = try {
@@ -73,7 +73,7 @@ class InstalledAppsManager(private val packageManager: PackageManager) {
     fun getApkInfo(packageName: String): InstalledApp? {
         return try {
             val info = packageManager.getPackageInfo(packageName, PackageManager.GET_META_DATA)
-            val appInfo = info.applicationInfo
+            val appInfo = info.applicationInfo ?: return null
             InstalledApp(
                 packageName = info.packageName,
                 appName = appInfo.loadLabel(packageManager).toString(),

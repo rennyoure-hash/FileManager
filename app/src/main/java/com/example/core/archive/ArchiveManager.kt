@@ -200,14 +200,11 @@ class ArchiveFileSystem(
     }
 
     private fun runBlockingExtract(path: VPath, out: File): Boolean {
-        return java.util.concurrent.Callable {
-            manager.extractSingleEntry(file, path.normalized.removePrefix(archivePath.normalized).trim('/'), out)
-        }.let {
-            try {
-                // Use runBlocking via kotlinx
-                kotlinx.coroutines.runBlocking { it.call() }
-            } catch (_: Exception) { false }
-        }
+        return try {
+            kotlinx.coroutines.runBlocking {
+                manager.extractSingleEntry(file, path.normalized.removePrefix(archivePath.normalized).trim('/'), out)
+            }
+        } catch (_: Exception) { false }
     }
 
     override fun openWrite(path: VPath, append: Boolean): OutputStream {

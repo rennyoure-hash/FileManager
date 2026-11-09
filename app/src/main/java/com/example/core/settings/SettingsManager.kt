@@ -91,7 +91,7 @@ class SettingsManager(private val context: Context) {
     suspend fun backupSettings(): Map<String, String> {
         val prefs = context.settingsDataStore.data.first()
         val map = mutableMapOf<String, String>()
-        prefs.forEach { (key, value) ->
+        for ((key, value) in prefs) {
             map[key.name] = value.toString()
         }
         return map
