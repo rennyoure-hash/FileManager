@@ -54,13 +54,14 @@ class AuthManager(private val context: Context, private val scope: CoroutineScop
         }
     }
 
-    fun attemptAutoSignIn() {
+    fun attemptAutoSignIn(activity: Activity? = null) {
         val auth = auth ?: return
         if (auth.currentUser != null) {
             _currentUser.value = auth.currentUser
             return
         }
 
+        val hostContext: Context = activity ?: context
         val clientId = try {
             context.getString(R.string.default_web_client_id)
         } catch (_: Exception) {
@@ -79,7 +80,7 @@ class AuthManager(private val context: Context, private val scope: CoroutineScop
 
         scope.launch {
             try {
-                val result = credentialManager.getCredential(context, request)
+                val result = credentialManager.getCredential(hostContext, request)
                 val credential = result.credential
                 if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
