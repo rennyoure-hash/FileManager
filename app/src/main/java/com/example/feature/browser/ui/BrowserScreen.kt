@@ -13,11 +13,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -50,12 +55,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.core.fs.StorageRoots
 import com.example.core.fs.VEntry
 import com.example.core.fs.VPath
@@ -64,6 +71,7 @@ import com.example.feature.browser.PaneId
 import com.example.feature.browser.SortBy
 import com.example.feature.browser.SortOrder
 import com.example.ui.theme.CyanAccent
+import com.example.ui.theme.DangerCrimson
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.DarkSurface
 import com.example.ui.theme.DarkSurfaceHighlight
@@ -91,6 +99,7 @@ fun BrowserScreen(
     val hasStoragePermission by viewModel.hasStoragePermission.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val cloudBookmarks by viewModel.cloudBookmarks.collectAsState()
+    val safDirectories by viewModel.safDirectories.collectAsState()
 
     val activeState = if (activePaneId == PaneId.PANE_A) paneAState else paneBState
 
@@ -98,7 +107,9 @@ fun BrowserScreen(
     var showNewItemDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var contextTargetEntry by remember { mutableStateOf<Pair<PaneId, VEntry>?>(null) }
     var showStorageRootsSheet by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
 
@@ -154,6 +165,42 @@ fun BrowserScreen(
                             )
                         }
 
+                        // User profile avatar & Sign out
+                        IconButton(
+                            onClick = { showProfileDialog = true },
+                            modifier = Modifier.testTag("topbar_btn_profile")
+                        ) {
+                            if (currentUser?.photoUrl != null) {
+                                AsyncImage(
+                                    model = currentUser?.photoUrl,
+                                    contentDescription = "User profile: ${currentUser?.displayName}",
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .border(1.5.dp, CyanAccent, CircleShape)
+                                )
+                            } else {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(DarkSurfaceHighlight)
+                                        .border(1.dp, CyanAccent, CircleShape)
+                                ) {
+                                    val initial = currentUser?.displayName?.firstOrNull()?.toString()
+                                        ?: currentUser?.email?.firstOrNull()?.toString()
+                                        ?: "U"
+                                    Text(
+                                        text = initial.uppercase(),
+                                        color = CyanAccent,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+
                         // Refresh
                         IconButton(
                             onClick = { viewModel.refreshPane(activePaneId) },
@@ -184,6 +231,16 @@ fun BrowserScreen(
                                 onDismissRequest = { showOverflowMenu = false },
                                 modifier = Modifier.background(DarkSurface)
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Account Profile", color = TextPrimary) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = CyanAccent)
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        showProfileDialog = true
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Sort by...", color = TextPrimary) },
                                     leadingIcon = {
@@ -223,6 +280,16 @@ fun BrowserScreen(
                                         showNewItemDialog = true
                                     }
                                 )
+                                DropdownMenuItem(
+                                    text = { Text("Grant Folder (SAF)", color = TextPrimary) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.FolderShared, contentDescription = null, tint = CyanAccent)
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        onRequestSafFallback()
+                                    }
+                                )
                                 if (onOpenTools != null) {
                                     DropdownMenuItem(
                                         text = { Text("Tools", color = TextPrimary) },
@@ -235,6 +302,16 @@ fun BrowserScreen(
                                         }
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text("Sign Out", color = DangerCrimson) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.ExitToApp, contentDescription = null, tint = DangerCrimson)
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        viewModel.signOut()
+                                    }
+                                )
                             }
 
                             // Sort submenu
@@ -407,6 +484,24 @@ fun BrowserScreen(
                             onOpenFile = onOpenFile,
                             onSearchQueryChange = { viewModel.setSearchQuery(PaneId.PANE_A, it) },
                             onCloseSearch = { viewModel.toggleSearch(PaneId.PANE_A) },
+                            onCopyItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_A)
+                                viewModel.copySingleToOtherPane(PaneId.PANE_A, entry)
+                            },
+                            onMoveItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_A)
+                                viewModel.moveSingleToOtherPane(PaneId.PANE_A, entry)
+                            },
+                            onRenameItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_A)
+                                contextTargetEntry = PaneId.PANE_A to entry
+                                showRenameDialog = true
+                            },
+                            onDeleteItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_A)
+                                contextTargetEntry = PaneId.PANE_A to entry
+                                showDeleteConfirmDialog = true
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -436,6 +531,24 @@ fun BrowserScreen(
                             onOpenFile = onOpenFile,
                             onSearchQueryChange = { viewModel.setSearchQuery(PaneId.PANE_B, it) },
                             onCloseSearch = { viewModel.toggleSearch(PaneId.PANE_B) },
+                            onCopyItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_B)
+                                viewModel.copySingleToOtherPane(PaneId.PANE_B, entry)
+                            },
+                            onMoveItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_B)
+                                viewModel.moveSingleToOtherPane(PaneId.PANE_B, entry)
+                            },
+                            onRenameItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_B)
+                                contextTargetEntry = PaneId.PANE_B to entry
+                                showRenameDialog = true
+                            },
+                            onDeleteItem = { entry ->
+                                viewModel.setActivePane(PaneId.PANE_B)
+                                contextTargetEntry = PaneId.PANE_B to entry
+                                showDeleteConfirmDialog = true
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
@@ -456,6 +569,20 @@ fun BrowserScreen(
                         onOpenFile = onOpenFile,
                         onSearchQueryChange = { viewModel.setSearchQuery(activePaneId, it) },
                         onCloseSearch = { viewModel.toggleSearch(activePaneId) },
+                        onCopyItem = { entry ->
+                            viewModel.copySingleToOtherPane(activePaneId, entry)
+                        },
+                        onMoveItem = { entry ->
+                            viewModel.moveSingleToOtherPane(activePaneId, entry)
+                        },
+                        onRenameItem = { entry ->
+                            contextTargetEntry = activePaneId to entry
+                            showRenameDialog = true
+                        },
+                        onDeleteItem = { entry ->
+                            contextTargetEntry = activePaneId to entry
+                            showDeleteConfirmDialog = true
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -473,22 +600,42 @@ fun BrowserScreen(
     }
 
     if (showRenameDialog) {
-        val selected = activeState.rawEntries.filter { activeState.selectedPaths.contains(it.path) }
-        if (selected.isNotEmpty()) {
-            val item = selected.first()
+        val targetPair = contextTargetEntry ?: run {
+            val selected = activeState.rawEntries.filter { activeState.selectedPaths.contains(it.path) }
+            selected.firstOrNull()?.let { activePaneId to it }
+        }
+        if (targetPair != null) {
+            val (paneId, item) = targetPair
             RenameDialog(
                 currentName = item.name,
-                onDismiss = { showRenameDialog = false },
-                onConfirm = { viewModel.renameItem(activePaneId, item, it) }
+                onDismiss = {
+                    showRenameDialog = false
+                    contextTargetEntry = null
+                },
+                onConfirm = {
+                    viewModel.renameItem(paneId, item, it)
+                    contextTargetEntry = null
+                }
             )
         }
     }
 
     if (showDeleteConfirmDialog) {
+        val targetPair = contextTargetEntry
         DeleteConfirmDialog(
-            count = activeState.selectedCount,
-            onDismiss = { showDeleteConfirmDialog = false },
-            onConfirm = { viewModel.deleteSelected(activePaneId) }
+            count = if (targetPair != null) 1 else activeState.selectedCount,
+            onDismiss = {
+                showDeleteConfirmDialog = false
+                contextTargetEntry = null
+            },
+            onConfirm = {
+                if (targetPair != null) {
+                    viewModel.deleteSingleItem(targetPair.first, targetPair.second)
+                    contextTargetEntry = null
+                } else {
+                    viewModel.deleteSelected(activePaneId)
+                }
+            }
         )
     }
 
@@ -499,6 +646,9 @@ fun BrowserScreen(
             quickLocations = StorageRoots.getQuickLocations(context),
             currentUser = currentUser,
             cloudBookmarks = cloudBookmarks,
+            safDirectories = safDirectories,
+            onRequestSafFolder = onRequestSafFallback,
+            onRevokeSafAccess = { uri -> viewModel.revokeSafAccess(uri) },
             onSignInGoogle = {
                 (context as? android.app.Activity)?.let { activity ->
                     viewModel.signInWithGoogle(activity)
@@ -526,6 +676,18 @@ fun BrowserScreen(
             onResolve = { action, applyToAll ->
                 viewModel.resolveConflict(action, applyToAll)
             }
+        )
+    }
+
+    if (showProfileDialog) {
+        UserProfileDialog(
+            user = currentUser,
+            bookmarkCount = cloudBookmarks.size,
+            onSignOut = {
+                showProfileDialog = false
+                viewModel.signOut()
+            },
+            onDismiss = { showProfileDialog = false }
         )
     }
 }

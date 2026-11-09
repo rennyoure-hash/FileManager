@@ -386,14 +386,92 @@ class FileManagerViewModel(application: Application) : AndroidViewModel(applicat
     fun renameItem(paneId: PaneId, entry: VEntry, newName: String) {
         val trimmed = newName.trim()
         if (trimmed.isEmpty() || trimmed == entry.name) return
-        val parent = entry.path.parent ?: return
-        val newPath = parent.resolve(trimmed)
 
         viewModelScope.launch {
-            val success = fileSystem.rename(entry.path, newPath)
+            val success = com.example.core.fs.DocumentFileOperations.rename(getApplication(), entry.path, trimmed)
+                || (entry.path.parent?.let { fileSystem.rename(entry.path, it.resolve(trimmed)) } == true)
             if (success) {
                 clearSelection(paneId)
                 refreshPane(paneId)
+                val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
+                val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                if (other.currentPath == current.currentPath) {
+                    refreshPane(otherPaneId)
+                }
+            }
+        }
+    }
+
+    fun deleteSingleItem(paneId: PaneId, entry: VEntry) {
+        viewModelScope.launch {
+            val success = com.example.core.fs.DocumentFileOperations.delete(getApplication(), entry.path)
+                || fileSystem.delete(entry.path, recursive = true)
+            if (success) {
+                clearSelection(paneId)
+                refreshPane(paneId)
+                val otherPaneId = if (paneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
+                val other = if (otherPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                val current = if (paneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+                if (other.currentPath == current.currentPath) {
+                    refreshPane(otherPaneId)
+                }
+            }
+        }
+    }
+
+    fun copySingleToOtherPane(sourcePaneId: PaneId, entry: VEntry) {
+        val targetPaneId = if (sourcePaneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
+        val targetState = if (targetPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+
+        viewModelScope.launch {
+            val docCopied = com.example.core.fs.DocumentFileOperations.copy(
+                getApplication(),
+                entry.path,
+                targetState.currentPath
+            )
+            if (docCopied) {
+                clearSelection(sourcePaneId)
+                refreshPane(targetPaneId)
+            } else {
+                taskEngine.startCopy(
+                    sources = listOf(entry),
+                    targetDir = targetState.currentPath,
+                    sourceFs = fileSystem,
+                    targetFs = fileSystem
+                ) {
+                    clearSelection(sourcePaneId)
+                    refreshPane(targetPaneId)
+                }
+            }
+        }
+    }
+
+    fun moveSingleToOtherPane(sourcePaneId: PaneId, entry: VEntry) {
+        val targetPaneId = if (sourcePaneId == PaneId.PANE_A) PaneId.PANE_B else PaneId.PANE_A
+        val targetState = if (targetPaneId == PaneId.PANE_A) _paneAState.value else _paneBState.value
+
+        viewModelScope.launch {
+            val docMoved = com.example.core.fs.DocumentFileOperations.move(
+                getApplication(),
+                entry.path,
+                targetState.currentPath
+            )
+            if (docMoved) {
+                clearSelection(sourcePaneId)
+                refreshPane(sourcePaneId)
+                refreshPane(targetPaneId)
+            } else {
+                taskEngine.startMove(
+                    sources = listOf(entry),
+                    targetDir = targetState.currentPath,
+                    sourceFs = fileSystem,
+                    targetFs = fileSystem
+                ) {
+                    clearSelection(sourcePaneId)
+                    refreshPane(sourcePaneId)
+                    refreshPane(targetPaneId)
+                }
             }
         }
     }

@@ -50,6 +50,10 @@ fun FileListPane(
     onOpenFile: (VEntry) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onCloseSearch: () -> Unit,
+    onCopyItem: (VEntry) -> Unit = {},
+    onMoveItem: (VEntry) -> Unit = {},
+    onRenameItem: (VEntry) -> Unit = {},
+    onDeleteItem: (VEntry) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -174,7 +178,11 @@ fun FileListPane(
                             },
                             onToggleSelect = {
                                 onToggleSelect(entry.path)
-                            }
+                            },
+                            onCopy = { onCopyItem(entry) },
+                            onMove = { onMoveItem(entry) },
+                            onRename = { onRenameItem(entry) },
+                            onDelete = { onDeleteItem(entry) }
                         )
                         HorizontalDivider(
                             color = DarkSurfaceHighlight.copy(alpha = 0.5f),

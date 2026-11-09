@@ -1,6 +1,7 @@
 package com.example.feature.browser.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,28 +14,38 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +57,8 @@ import com.example.core.fs.EntryType
 import com.example.core.fs.VEntry
 import com.example.ui.theme.CodeBlue
 import com.example.ui.theme.CyanAccent
+import com.example.ui.theme.DangerCrimson
+import com.example.ui.theme.DarkSurfaceElevated
 import com.example.ui.theme.FolderGold
 import com.example.ui.theme.MediaPurple
 import com.example.ui.theme.SuccessGreen
@@ -63,24 +76,18 @@ fun FileItemRow(
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onToggleSelect: () -> Unit,
+    onCopy: () -> Unit = {},
+    onMove: () -> Unit = {},
+    onRename: () -> Unit = {},
+    onDelete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showContextMenu by remember { mutableStateOf(false) }
+
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
     } else {
         Color.Transparent
-    }
-
-    val spokenDescription = buildString {
-        if (entry.isDirectory) append("Folder ") else append("File ")
-        append("${entry.name}, ")
-        if (!entry.isDirectory && entry.formattedSize.isNotEmpty()) {
-            append("${entry.formattedSize}, ")
-        }
-        if (entry.formattedDate.isNotEmpty()) {
-            append("modified ${entry.formattedDate}, ")
-        }
-        if (isSelected) append("selected") else append("not selected")
     }
 
     Surface(
@@ -93,7 +100,10 @@ fun FileItemRow(
             }
             .combinedClickable(
                 onClick = onTap,
-                onLongClick = onLongPress
+                onLongClick = {
+                    showContextMenu = true
+                    onLongPress()
+                }
             )
             .testTag("file_item_${entry.name}")
     ) {
@@ -156,6 +166,95 @@ fun FileItemRow(
                             fontSize = 11.sp
                         )
                     }
+                }
+            }
+
+            // Context menu button and dropdown (Copy, Move, Rename, Delete)
+            Box {
+                IconButton(
+                    onClick = { showContextMenu = true },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("context_menu_btn_${entry.name}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "File options for ${entry.name}",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showContextMenu,
+                    onDismissRequest = { showContextMenu = false },
+                    modifier = Modifier
+                        .background(DarkSurfaceElevated)
+                        .testTag("context_menu_${entry.name}")
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Copy", color = TextPrimary) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = null,
+                                tint = CyanAccent
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onCopy()
+                        },
+                        modifier = Modifier.testTag("context_menu_copy_${entry.name}")
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Move", color = TextPrimary) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                contentDescription = null,
+                                tint = CyanAccent
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onMove()
+                        },
+                        modifier = Modifier.testTag("context_menu_move_${entry.name}")
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Rename", color = TextPrimary) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.DriveFileRenameOutline,
+                                contentDescription = null,
+                                tint = CyanAccent
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onRename()
+                        },
+                        modifier = Modifier.testTag("context_menu_rename_${entry.name}")
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = DangerCrimson) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = DangerCrimson
+                            )
+                        },
+                        onClick = {
+                            showContextMenu = false
+                            onDelete()
+                        },
+                        modifier = Modifier.testTag("context_menu_delete_${entry.name}")
+                    )
                 }
             }
         }

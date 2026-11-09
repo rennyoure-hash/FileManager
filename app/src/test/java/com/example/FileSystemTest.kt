@@ -76,4 +76,34 @@ class FileSystemTest {
         assertTrue(fs.delete(subDir, recursive = true))
         assertFalse(fs.exists(subDir))
     }
+
+    @Test
+    fun testDocumentFileOperations() = runBlocking {
+        val rootDir = tempFolder.newFolder("docfile_test")
+        val srcDir = File(rootDir, "src").apply { mkdirs() }
+        val dstDir = File(rootDir, "dst").apply { mkdirs() }
+
+        val sampleFile = File(srcDir, "sample.txt")
+        sampleFile.writeText("DocumentFile Test Content")
+
+        val samplePath = VPath(sampleFile.absolutePath)
+        val dstPath = VPath(dstDir.absolutePath)
+
+        // Resolve via DocumentFile.fromFile
+        val doc = androidx.documentfile.provider.DocumentFile.fromFile(sampleFile)
+        assertTrue(doc.exists())
+        assertEquals("sample.txt", doc.name)
+
+        // Rename via DocumentFile
+        assertTrue(doc.renameTo("renamed_sample.txt"))
+        val renamedFile = File(srcDir, "renamed_sample.txt")
+        assertTrue(renamedFile.exists())
+
+        // Delete via DocumentFile
+        val renamedDoc = androidx.documentfile.provider.DocumentFile.fromFile(renamedFile)
+        assertTrue(renamedDoc.delete())
+        assertFalse(renamedFile.exists())
+        assertNotNull(dstPath)
+        assertNotNull(samplePath)
+    }
 }
