@@ -33,14 +33,16 @@ object ChecksumTool {
 
 class FileSplitter {
     suspend fun split(file: File, chunkSizeBytes: Long, outDir: File): List<File> = withContext(Dispatchers.IO) {
+        require(chunkSizeBytes in 1..100 * 1024 * 1024) { "Chunk size must be 1 byte to 100 MB" }
         outDir.mkdirs()
         val parts = mutableListOf<File>()
         FileInputStream(file).use { input ->
             var index = 0
             input.use {
-                val buffer = ByteArray(chunkSizeBytes.toInt().coerceIn(1, 10 * 1024 * 1024))
+                val buffer = ByteArray(minOf(chunkSizeBytes, 10L * 1024 * 1024).toInt())
                 while (true) {
                     val partFile = File(outDir, "${file.name}.part$index")
+                    var wroteAny = false
                     FileOutputStream(partFile).use { output ->
                         var total = 0L
                         while (total < chunkSizeBytes) {
@@ -49,14 +51,16 @@ class FileSplitter {
                             if (read == -1) break
                             output.write(buffer, 0, read)
                             total += read
+                            wroteAny = true
                         }
+                    }
+                    if (!wroteAny) {
+                        partFile.delete()
+                        break
                     }
                     parts.add(partFile)
                     index++
-                    if (partFile.length() == 0L) break
-                    // check EOF by peeking next byte via mark not available; check if we reached EOF by trying read
-                    // Simplify: stop if last read was shorter than chunk
-                    if (parts.last().length() < chunkSizeBytes) break
+                    if (partFile.length() < chunkSizeBytes) break
                 }
             }
         }

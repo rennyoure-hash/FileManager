@@ -40,7 +40,6 @@ fun TextViewerScreen(
     var searchQuery by remember { mutableStateOf("") }
     var replacement by remember { mutableStateOf("") }
     var showReplace by remember { mutableStateOf(false) }
-    var searchIndex by remember { mutableIntStateOf(0) }
     var saved by remember { mutableStateOf(false) }
 
     LaunchedEffect(file) {

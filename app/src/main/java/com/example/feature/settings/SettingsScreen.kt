@@ -164,15 +164,17 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("HTTP remote management")
-                        Text("Access files from browser (off by default)", style = MaterialTheme.typography.bodySmall)
+                        Text("HTTP remote management", color = androidx.compose.ui.graphics.Color.Gray)
+                        Text(
+                            "Not yet implemented in this build. See README roadmap.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = androidx.compose.ui.graphics.Color.Gray
+                        )
                     }
                     Switch(
-                        checked = remoteEnabled,
-                        onCheckedChange = {
-                            remoteEnabled = it
-                            scope.launch { settingsManager.setRemoteMgmtEnabled(it) }
-                        }
+                        checked = false,
+                        enabled = false,
+                        onCheckedChange = {}
                     )
                 }
             }

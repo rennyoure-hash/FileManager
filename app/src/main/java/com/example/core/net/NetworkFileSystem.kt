@@ -54,25 +54,34 @@ class NetworkFileSystem(
         return "http://${profile.host}:${profile.port}${rootPath.normalized}"
     }
 
+    val isImplemented: Boolean = providerStatus() == "implemented"
+
+    private fun providerStatus(): String {
+        // Currently only WebDAV is considered for future implementation.
+        // FTP/SFTP/SMB/S3 need external libs (Apache Commons Net, sshj, smbj).
+        return "coming_soon"
+    }
+
     override suspend fun list(path: VPath): List<VEntry> = withContext(Dispatchers.IO) {
         // WebDAV PROPFIND simplified — returns empty for now, real impl needs XML parser
         // For FTP/SFTP etc., we'd use dedicated libraries here.
         throw UnsupportedOperationException(
-            "Network protocol ${profile.protocol} not fully implemented in this build. " +
-                "WebDAV requires XML parsing; FTP/SFTP/SMB need external libraries."
+            "Network protocol ${profile.protocol} is not yet implemented. " +
+                "It is registered for future support. See README for roadmap."
         )
     }
 
     override suspend fun stat(path: VPath): VEntry? {
-        throw UnsupportedOperationException("Network stat not implemented")
+        // Not implemented — return null so callers can show "unavailable"
+        return null
     }
 
     override fun openRead(path: VPath, offset: Long): InputStream {
-        throw UnsupportedOperationException("Network read not implemented")
+        throw UnsupportedOperationException("Network storage (${profile.protocol}) is not yet available in this build")
     }
 
     override fun openWrite(path: VPath, append: Boolean): OutputStream {
-        throw UnsupportedOperationException("Network write not implemented")
+        throw UnsupportedOperationException("Network storage (${profile.protocol}) is not yet available in this build")
     }
 
     override suspend fun mkdir(path: VPath): Boolean = false
@@ -94,10 +103,15 @@ class RemoteFileServer(
     var isRunning = false
         private set
 
+    /**
+     * Remote management is not yet implemented in this build.
+     * Kept as stub so Settings toggle shows honest state. In production
+     * this would use NanoHTTPD/Ktor with password + HTTPS.
+     */
     fun start() {
-        // In production, use NanoHTTPD or Ktor.
-        // This stub marks the feature as present.
-        isRunning = true
+        throw UnsupportedOperationException(
+            "Remote management is not yet implemented. Disable it in Settings."
+        )
     }
 
     fun stop() {

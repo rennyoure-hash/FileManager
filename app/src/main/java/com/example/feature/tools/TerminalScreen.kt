@@ -34,9 +34,13 @@ fun TerminalScreen(
     var isRunning by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var shouldExit by remember { mutableStateOf(false) }
 
     LaunchedEffect(lines.size) {
         listState.animateScrollToItem(maxOf(0, lines.size - 1))
+    }
+    LaunchedEffect(shouldExit) {
+        if (shouldExit) onBack()
     }
 
     Scaffold(
@@ -95,10 +99,16 @@ fun TerminalScreen(
                         isRunning = true
                         lines = lines + "${currentDir.name} $ $cmd"
                         scope.launch {
-                            val output = runCommand(cmd, currentDir) { newDir ->
-                                currentDir = newDir
+                            if (cmd == "clear") {
+                                lines = listOf("MT Explorer Terminal", "Type 'help' for commands", "")
+                            } else if (cmd == "exit") {
+                                shouldExit = true
+                            } else {
+                                val output = runCommand(cmd, currentDir) { newDir ->
+                                    currentDir = newDir
+                                }
+                                lines = lines + output
                             }
-                            lines = lines + output
                             isRunning = false
                         }
                     },
@@ -125,11 +135,7 @@ private suspend fun runCommand(
     val args = parts.drop(1)
 
     return@withContext when (command) {
-        "help" -> "Commands: ls, cd <dir>, pwd, cat <file>, echo <text>, clear, mkdir <dir>, rmdir <dir>, rm <file>, touch <file>, whoami, exit"
-        "clear" -> {
-            // Handled by caller clearing lines — return marker
-            "\u000C"
-        }
+        "help" -> "Commands: ls, cd <dir>, pwd, cat <file>, echo <text>, clear, mkdir <dir>, rmdir -y <dir>, rm -y <file>, touch <file>, whoami, exit (rm/rmdir need -y for safety)"
         "pwd" -> dir.absolutePath
         "ls", "ll" -> {
             val files = dir.listFiles()?.sortedBy { !it.isDirectory } ?: emptyList()
@@ -177,18 +183,24 @@ private suspend fun runCommand(
         }
         "rmdir" -> {
             if (args.isEmpty()) "rmdir: missing operand"
-            else {
-                val f = File(dir, args[0])
-                if (!f.exists()) "rmdir: ${args[0]}: No such file or directory"
-                else if (f.delete().not()) "rmdir: failed to remove '${args[0]}'" else ""
+            else if (args[0] != "-y" && args[0] != "--yes") {
+                "rmdir: use 'rmdir -y <dir>' to confirm (safety)"
+            } else {
+                val target = args.getOrNull(1) ?: "missing operand"
+                val f = File(dir, target)
+                if (!f.exists()) "rmdir: $target: No such file or directory"
+                else if (f.delete().not()) "rmdir: failed to remove '$target'" else ""
             }
         }
         "rm" -> {
             if (args.isEmpty()) "rm: missing operand"
-            else {
-                val f = File(dir, args[0])
-                if (!f.exists()) "rm: ${args[0]}: No such file"
-                else if (f.delete().not()) "rm: failed to remove '${args[0]}'" else ""
+            else if (args[0] != "-y" && args[0] != "--yes") {
+                "rm: use 'rm -y <file>' to confirm (safety)"
+            } else {
+                val target = args.getOrNull(1) ?: "missing operand"
+                val f = File(dir, target)
+                if (!f.exists()) "rm: $target: No such file"
+                else if (f.delete().not()) "rm: failed to remove '$target'" else ""
             }
         }
         "touch" -> {

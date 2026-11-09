@@ -172,17 +172,26 @@ class ArchiveFileSystem(
 
     private val manager = ArchiveManager()
 
+    private var cachedEntries: List<VEntry>? = null
+
     override suspend fun list(path: VPath): List<VEntry> {
-        val entries = manager.listZip(file)
+        val entries = cachedEntries ?: manager.listZip(file).also { cachedEntries = it }
         val relative = path.normalized.removePrefix(archivePath.normalized).trim('/')
-        if (relative.isEmpty()) return entries.filter { !it.path.normalized.contains("/") || it.path.normalized.count { c -> c == '/' } <= 1 }
-        // Return children under prefix
-        return entries.filter {
-            val n = it.path.normalized
-            n.startsWith(relative) && n != relative
-        }.filter {
-            val rest = it.path.normalized.removePrefix(relative).trim('/')
-            rest.count { c -> c == '/' } == 0 || rest.endsWith("/")
+        if (relative.isEmpty()) {
+            // top-level only
+            return entries.filter { entry ->
+                val n = entry.path.normalized
+                !n.contains("/") || n.trimEnd('/').count { c -> c == '/' } == 0
+            }
+        }
+        // children only: prefix + exactly one segment deeper
+        val prefix = relative.trimEnd('/')
+        return entries.filter { entry ->
+            val n = entry.path.normalized.trimEnd('/')
+            if (n == prefix) return@filter false
+            if (!n.startsWith("$prefix/")) return@filter false
+            val rest = n.removePrefix("$prefix/")
+            !rest.contains("/")
         }
     }
 
@@ -201,7 +210,7 @@ class ArchiveFileSystem(
 
     private fun runBlockingExtract(path: VPath, out: File): Boolean {
         return try {
-            kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
                 manager.extractSingleEntry(file, path.normalized.removePrefix(archivePath.normalized).trim('/'), out)
             }
         } catch (_: Exception) { false }

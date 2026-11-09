@@ -34,7 +34,13 @@ fun NetworkStorageScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
+        Column(Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
+            Text(
+                "Network storage (FTP / SFTP / SMB / WebDAV / S3) is registered for future support but not yet implemented in this build. You can save profiles for later.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
             if (profiles.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                     Text("No network profiles saved")
@@ -44,9 +50,9 @@ fun NetworkStorageScreen(
                     items(profiles) { profile ->
                         ListItem(
                             headlineContent = { Text(profile.name) },
-                            supportingContent = { Text("${profile.protocol} • ${profile.host}:${profile.port}${profile.basePath}") },
+                            supportingContent = { Text("${profile.protocol} • ${profile.host}:${profile.port}${profile.basePath} — Connect pending implementation") },
                             trailingContent = {
-                                TextButton(onClick = { onConnect(profile) }) { Text("Connect") }
+                                TextButton(onClick = { /* disabled until implemented */ }) { Text("Coming soon") }
                             }
                         )
                         HorizontalDivider()

@@ -10,6 +10,8 @@
         android:maxSdkVersion="29"
         tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QUERY_ALL_PACKAGES" />
 
     <application
         android:allowBackup="true"

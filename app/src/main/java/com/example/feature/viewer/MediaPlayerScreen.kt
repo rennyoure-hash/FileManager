@@ -120,6 +120,17 @@ fun MediaPlayerScreen(
                         }
                     }
                 }
+                if (duration > 0) {
+                    Slider(
+                        value = position.toFloat(),
+                        onValueChange = { pos ->
+                            position = pos.toInt()
+                            audioPlayer?.seekTo(position)
+                        },
+                        valueRange = 0f..duration.toFloat(),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center

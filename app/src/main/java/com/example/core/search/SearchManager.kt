@@ -56,8 +56,17 @@ class SearchManager {
                 val ext = file.extension.lowercase()
                 if (ext in listOf("jpg", "png", "mp4", "mp3", "apk", "zip", "7z", "rar")) return@forEach
                 try {
-                    val text = file.bufferedReader().readText().lowercase()
-                    if (text.contains(q)) {
+                    // Streaming read line-by-line to avoid OOM on large folders/files
+                    var found = false
+                    file.bufferedReader().useLines { lines ->
+                        for (line in lines) {
+                            if (line.lowercase().contains(q)) {
+                                found = true
+                                break
+                            }
+                        }
+                    }
+                    if (found) {
                         val rel = file.absolutePath.removePrefix(rootFile.absolutePath).trim('/')
                         results.add(
                             SearchResult(

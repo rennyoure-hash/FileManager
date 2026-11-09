@@ -97,4 +97,17 @@ class SettingsManager(private val context: Context) {
         }
         return map
     }
+
+    suspend fun saveBatchRenameHistory(entry: String) {
+        context.settingsDataStore.edit {
+            val current = it[SettingsKeys.BATCH_RENAME_HISTORY] ?: ""
+            val lines = current.split("\n").filter { it.isNotBlank() }.takeLast(20)
+            it[SettingsKeys.BATCH_RENAME_HISTORY] = (lines + entry).joinToString("\n")
+        }
+    }
+
+    suspend fun getBatchRenameHistory(): List<String> {
+        val value = context.settingsDataStore.data.map { it[SettingsKeys.BATCH_RENAME_HISTORY] }.first()
+        return value?.split("\n")?.filter { it.isNotBlank() } ?: emptyList()
+    }
 }
