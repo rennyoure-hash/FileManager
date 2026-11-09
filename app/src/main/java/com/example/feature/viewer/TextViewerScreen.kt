@@ -202,6 +202,7 @@ fun TextViewerScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HexEditorScreen(
     file: File,

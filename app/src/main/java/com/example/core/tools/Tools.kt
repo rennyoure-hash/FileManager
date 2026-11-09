@@ -110,7 +110,7 @@ class DuplicateFinder {
         val groups = mutableListOf<DuplicateGroup>()
         for ((_, sameSize) in bySize) {
             if (sameSize.size < 2) continue
-            val byHash = sameSize.groupBy { ChecksumTool.computeBlocking(it, "SHA-256") }
+            val byHash = sameSize.groupBy { computeBlocking(it, "SHA-256") }
             for ((hash, dups) in byHash) {
                 if (dups.size > 1) groups.add(DuplicateGroup(hash, dups))
             }

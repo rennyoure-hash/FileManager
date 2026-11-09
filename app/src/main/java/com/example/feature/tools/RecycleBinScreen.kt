@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.example.core.storage.RecycleBin
 import com.example.core.storage.TrashedItem
 import java.io.File
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,6 +26,7 @@ fun RecycleBinScreen(
 ) {
     var items by remember { mutableStateOf<List<TrashedItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         items = recycleBin.listTrashed()
@@ -43,8 +45,10 @@ fun RecycleBinScreen(
                 actions = {
                     if (items.isNotEmpty()) {
                         TextButton(onClick = {
-                            recycleBin.emptyBin()
-                            items = emptyList()
+                            scope.launch {
+                                recycleBin.emptyBin()
+                                items = emptyList()
+                            }
                         }) {
                             Text("Empty")
                         }
@@ -72,15 +76,19 @@ fun RecycleBinScreen(
                             trailingContent = {
                                 Row {
                                     IconButton(onClick = {
-                                        if (recycleBin.restore(item)) {
-                                            items = recycleBin.listTrashed()
+                                        scope.launch {
+                                            if (recycleBin.restore(item)) {
+                                                items = recycleBin.listTrashed()
+                                            }
                                         }
                                     }) {
                                         Icon(Icons.Filled.Restore, "Restore")
                                     }
                                     IconButton(onClick = {
-                                        if (recycleBin.permanentDelete(item)) {
-                                            items = recycleBin.listTrashed()
+                                        scope.launch {
+                                            if (recycleBin.permanentDelete(item)) {
+                                                items = recycleBin.listTrashed()
+                                            }
                                         }
                                     }) {
                                         Icon(Icons.Filled.DeleteForever, "Delete forever")
@@ -96,6 +104,7 @@ fun RecycleBinScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BatchRenameScreen(
     files: List<File>,

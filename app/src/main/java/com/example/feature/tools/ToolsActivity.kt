@@ -90,7 +90,8 @@ fun ToolsHubList(onSelect: (String) -> Unit) {
         "NETWORK" to "Network Storage"
     )
     androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize().padding(8.dp)) {
-        items(items) { (key, label) ->
+        items(items.size) { idx ->
+            val (key, label) = items[idx]
             Card(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 onClick = { onSelect(key) }
