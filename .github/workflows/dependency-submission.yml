@@ -24,8 +24,8 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Submit Gradle dependency snapshots
         continue-on-error: true
-        uses: gradle/actions/dependency-submission@v2
+        uses: gradle/actions/dependency-submission@v6
