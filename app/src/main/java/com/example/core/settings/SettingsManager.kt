@@ -91,8 +91,9 @@ class SettingsManager(private val context: Context) {
     suspend fun backupSettings(): Map<String, String> {
         val prefs = context.settingsDataStore.data.first()
         val map = mutableMapOf<String, String>()
-        for ((key, value) in prefs) {
-            map[key.name] = value.toString()
+        for ((key, value) in prefs.asMap()) {
+            @Suppress("UNCHECKED_CAST")
+            map[(key as Preferences.Key<*>).name] = value.toString()
         }
         return map
     }
