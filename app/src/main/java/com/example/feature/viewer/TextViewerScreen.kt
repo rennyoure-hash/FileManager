@@ -274,7 +274,7 @@ fun HexEditorScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = rowBytes.joinToString("") { if (it.toInt() in 32..126) it.toChar().toString() else "." },
+                                text = rowBytes.joinToString("") { if (it.toInt() in 32..126) it.toInt().toChar().toString() else "." },
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
                                 color = Color(0xFF666666)
