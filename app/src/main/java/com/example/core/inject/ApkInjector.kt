@@ -70,7 +70,6 @@ object ApkInjector {
                         // stale signatures must be dropped, they are recreated by the signer
                         if (name.startsWith("META-INF/")) continue
                         if (name == "AndroidManifest.xml") continue
-                        if (name.endsWith(".dex")) continue
 
                         val data = zf.getInputStream(e).use { it.readBytes() }
                         val method = if (e.method == ZipEntry.STORED) ZipEntry.STORED else ZipEntry.DEFLATED
@@ -117,7 +116,8 @@ object ApkInjector {
                 payload = data
                 compressedSize = data.size.toLong()
             } else {
-                val def = Deflater(Deflater.BEST_COMPRESSION)
+                // nowrap = true -> raw deflate stream, which is what ZIP entries require
+                val def = Deflater(Deflater.BEST_COMPRESSION, true)
                 try {
                     def.setInput(data)
                     def.finish()
@@ -190,6 +190,7 @@ object ApkInjector {
             if (finished) return
             finished = true
             val cdStart = offset
+            var pos = offset
             for (e in entries) {
                 val h = ByteArray(46)
                 putU4(h, 0, 0x02014b50L)
@@ -210,7 +211,9 @@ object ApkInjector {
                 putU4(h, 38, 0x81a40000L) // external attrs: 0644
                 putU4(h, 42, e.localOffset)
                 out.write(h)
+                pos += h.size
                 out.write(e.nameBytes)
+                pos += e.nameBytes.size
                 if (e.extraLen > 0) {
                     val extra = ByteArray(e.extraLen)
                     extra[0] = 0x35.toByte()
@@ -218,9 +221,10 @@ object ApkInjector {
                     extra[2] = (e.extraLen - 4).toByte()
                     extra[3] = ((e.extraLen - 4) shr 8).toByte()
                     out.write(extra)
+                    pos += e.extraLen
                 }
             }
-            val cdSize = offset - cdStart
+            val cdSize = pos - cdStart
             val eocd = ByteArray(22)
             putU4(eocd, 0, 0x06054b50L)
             putU2(eocd, 4, 0)
@@ -232,6 +236,7 @@ object ApkInjector {
             putU2(eocd, 20, 0)
             out.write(eocd)
             out.flush()
+            offset = pos + eocd.size
         }
 
         override fun close() {
