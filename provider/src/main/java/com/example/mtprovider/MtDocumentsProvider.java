@@ -1,13 +1,13 @@
 package com.example.mtprovider;
 
 import android.content.Context;
+import android.content.pm.ProviderInfo;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.os.CancellationSignal;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.DocumentsProvider;
-import android.provider.ProviderInfo;
 import android.webkit.MimeTypeMap;
 
 import java.io.File;
@@ -33,6 +33,11 @@ public class MtDocumentsProvider extends DocumentsProvider {
     public static final String ROOT_ID_HOME = "home";
 
     private String authority;
+
+    @Override
+    public boolean onCreate() {
+        return true;
+    }
 
     @Override
     public void attachInfo(Context context, ProviderInfo info) {
@@ -102,7 +107,6 @@ public class MtDocumentsProvider extends DocumentsProvider {
                 DocumentsContract.Root.COLUMN_TITLE,
                 DocumentsContract.Root.COLUMN_ICON,
                 DocumentsContract.Root.COLUMN_FLAGS,
-                DocumentsContract.Root.COLUMN_MIME_TYPE,
                 DocumentsContract.Root.COLUMN_SUMMARY,
                 DocumentsContract.Root.COLUMN_DOCUMENT_ID
         });
@@ -114,7 +118,6 @@ public class MtDocumentsProvider extends DocumentsProvider {
                     "Filesystem",
                     null,
                     DocumentsContract.Root.FLAG_SUPPORTS_CREATE,
-                    DocumentsContract.Document.MIME_TYPE_DIR,
                     "Whole filesystem visible to this app",
                     "/"
             });
@@ -124,7 +127,6 @@ public class MtDocumentsProvider extends DocumentsProvider {
                         "App data",
                         null,
                         DocumentsContract.Root.FLAG_SUPPORTS_CREATE,
-                        DocumentsContract.Document.MIME_TYPE_DIR,
                         home.getAbsolutePath(),
                         home.getAbsolutePath()
                 });
@@ -223,21 +225,21 @@ public class MtDocumentsProvider extends DocumentsProvider {
     }
 
     @Override
-    public boolean deleteDocument(String documentId) {
+    public void deleteDocument(String documentId) {
         File f = resolve(documentId);
-        if (f == null || !f.exists()) return false;
+        if (f == null || !f.exists()) return;
         if (f.isDirectory()) {
             File[] kids = f.listFiles();
             if (kids != null) {
                 for (File k : kids) deleteDocument(k.getAbsolutePath());
             }
         }
-        return f.delete();
+        f.delete();
     }
 
     @Override
-    public boolean removeDocument(String documentId, String parentDocumentId) {
-        return deleteDocument(documentId);
+    public void removeDocument(String documentId, String parentDocumentId) {
+        deleteDocument(documentId);
     }
 
     @Override
