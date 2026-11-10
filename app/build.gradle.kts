@@ -17,17 +17,44 @@ plugins {
 // expose that app's private data directory through SAF).
 // ---------------------------------------------------------------------------
 val providerDexAssetDir = layout.buildDirectory.get().asFile.resolve("generated/providerDex")
-val providerApkFile = project(":provider").layout.buildDirectory.dir("outputs/apk/release").map { dir ->
-    dir.asFile.listFiles()?.firstOrNull { it.name.endsWith(".apk") }
-        ?: error("Provider APK not found in ${dir.asFile}")
-}
-val buildProviderDex by tasks.registering(Copy::class) {
-    dependsOn(":provider:assembleRelease")
-    from(zipTree(providerApkFile)) {
-        include("classes*.dex")
+
+/**
+ * Extracts classes*.dex out of the provider APK and stores it as an asset of the main app.
+ * The APK path is resolved at execution time (the provider module builds first), so this
+ * stays configuration-cache friendly.
+ */
+abstract class ExtractProviderDex : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun extract() {
+        val apks = apkDir.get().asFile.listFiles()?.filter { it.name.endsWith(".apk") }.orEmpty()
+        val apk = apks.firstOrNull()
+            ?: throw GradleException("Provider APK not found in ${apkDir.get().asFile}")
+        val out = outputDir.get().asFile
+        out.mkdirs()
+        val dexes = mutableListOf<Pair<String, ByteArray>>()
+        java.util.zip.ZipFile(apk).use { zf ->
+            zf.entries().asSequence()
+                .filter { !it.isDirectory && it.name.endsWith(".dex") }
+                .forEach { e ->
+                    dexes.add(e.name to zf.getInputStream(e).use { it.readBytes() })
+                }
+        }
+        if (dexes.isEmpty()) throw GradleException("No dex found in $apk")
+        if (dexes.size > 1) throw GradleException("Provider module produced ${dexes.size} dex files, expected 1")
+        File(out, "provider.dex").writeBytes(dexes.first().second)
     }
-    rename { "provider.dex" }
-    into(providerDexAssetDir)
+}
+
+val buildProviderDex by tasks.registering(ExtractProviderDex::class) {
+    dependsOn(":provider:assembleRelease")
+    apkDir.set(project(":provider").layout.buildDirectory.dir("outputs/apk/release"))
+    outputDir.set(providerDexAssetDir)
 }
 tasks.withType<com.android.build.gradle.tasks.MergeSourceSetFolders>().configureEach {
     dependsOn(buildProviderDex)
