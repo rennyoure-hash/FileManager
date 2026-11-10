@@ -12,13 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 5
+    # Secrets cannot be referenced directly in `if:` conditionals, so expose it as a job-level env var.
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
     steps:
       - name: Send Discord Notification
-        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
+        if: ${{ env.DISCORD_WEBHOOK != '' }}
         uses: Ilshidur/action-discord@bb23bf8d6f94dae04c78e20b693cb7831bd870ba
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK: ${{ env.DISCORD_WEBHOOK }}
         with:
           args: |
             ${{ github.workflow }} run ${{ github.run_number }} concluded with status: ${{ github.event.workflow_run.conclusion }}
