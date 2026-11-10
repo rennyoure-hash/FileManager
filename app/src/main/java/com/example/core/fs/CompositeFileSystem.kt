@@ -17,7 +17,10 @@ class CompositeFileSystem(
     fun getDelegate(path: VPath): FileSystem {
         return if (path.normalized.startsWith("saf:/") || path.rawPath.startsWith("saf:") || path.rawPath.startsWith("saf:/")) {
             safFs
-        } else if (RootManager.isRootExplorerEnabledFlow.value) {
+        } else if (RootManager.isRootExplorerEnabledFlow.value && RootManager.isRootGranted()) {
+            // Only route through the root shell when superuser is really granted.
+            // Otherwise (read-only fallback on non-rooted devices) every write would
+            // fail, while plain java.io.File still handles /system and /storage fine.
             rootFs
         } else {
             localFs

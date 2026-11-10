@@ -137,6 +137,16 @@ object RootManager {
         return findSuBinary() != null
     }
 
+    /**
+     * True only when superuser access was actually granted to this app.
+     * The "Root Explorer" toggle can be enabled in read-only fallback mode on non-rooted
+     * devices; in that state shell commands still fail, so privileged operations must not
+     * be routed through the root shell.
+     */
+    fun isRootGranted(): Boolean {
+        return _isRootGrantedAtStartup.value == true || _rootStatus.value == RootStatus.GRANTED
+    }
+
     fun isRootExplorerEnabled(context: Context): Boolean {
         return try {
             val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

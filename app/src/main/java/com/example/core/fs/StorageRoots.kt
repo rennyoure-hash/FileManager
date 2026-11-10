@@ -128,31 +128,52 @@ object StorageRoots {
         } catch (_: Exception) {
         }
 
-        // 4. Root Explorer System Roots (when Root Explorer is enabled)
+        // 4. System partitions.
+        //    /system, /vendor, /product, /system_ext, /apex and /etc are mounted world-readable
+        //    (read-only), so they can be browsed without root - same behaviour as MT Manager.
+        //    "/" and "/data" require real superuser access.
         try {
-            if (RootManager.isRootExplorerEnabled(context)) {
-                val systemRoots = listOf(
-                    "Root Directory (/)" to "/",
-                    "System (/system)" to "/system",
-                    "Vendor (/vendor)" to "/vendor",
-                    "Data (/data)" to "/data"
-                )
-                for ((title, rawPath) in systemRoots) {
-                    val dir = File(rawPath)
-                    if (rawPath == "/" || dir.exists()) {
-                        list.add(
-                            StorageRoot(
-                                title = title,
-                                path = VPath(rawPath),
-                                isPrimary = false,
-                                isRemovable = false,
-                                totalSpace = dir.totalSpace,
-                                freeSpace = dir.freeSpace,
-                                mountEntry = RootManager.getMountForPath(rawPath)
-                            )
+            val rootGranted = RootManager.isRootExplorerEnabled(context) && RootManager.isRootGranted()
+            val systemRoots = listOf(
+                "Root Directory (/)" to "/",
+                "System (/system)" to "/system",
+                "Vendor (/vendor)" to "/vendor",
+                "Product (/product)" to "/product",
+                "System Ext (/system_ext)" to "/system_ext",
+                "APEX (/apex)" to "/apex",
+                "etc (/etc)" to "/etc",
+                "Data (/data)" to "/data"
+            )
+            for ((title, rawPath) in systemRoots) {
+                val requiresRoot = rawPath == "/" || rawPath == "/data"
+                if (requiresRoot && !rootGranted) continue
+
+                val dir = File(rawPath)
+                if (rawPath != "/" && !(dir.exists() && dir.canRead())) continue
+
+                val mount = RootManager.getMountForPath(rawPath)
+                    ?: if (requiresRoot) {
+                        null
+                    } else {
+                        MountEntry(
+                            device = "system",
+                            mountPoint = rawPath,
+                            fsType = "read-only",
+                            options = listOf("ro")
                         )
                     }
-                }
+
+                list.add(
+                    StorageRoot(
+                        title = title,
+                        path = VPath(rawPath),
+                        isPrimary = false,
+                        isRemovable = false,
+                        totalSpace = dir.totalSpace,
+                        freeSpace = dir.freeSpace,
+                        mountEntry = mount
+                    )
+                )
             }
         } catch (_: Exception) {
         }
