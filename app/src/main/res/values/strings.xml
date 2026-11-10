@@ -43,4 +43,6 @@
     <string name="permission_use_saf">Use Specific Folder (SAF)</string>
     <string name="permission_not_now">Not Now</string>
     <string name="permission_saf_fallback_prompt">All Files Access was not granted. Would you like to select a specific folder via the Storage Access Framework (SAF) instead?</string>
+    <!-- Placeholder so R.string.default_web_client_id resolves when google-services.json is absent (offline mode). -->
+    <string name="default_web_client_id">1234567890-webclientid.apps.googleusercontent.com</string>
 </resources>
