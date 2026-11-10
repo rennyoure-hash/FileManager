@@ -16,7 +16,7 @@ plugins {
 // third-party APKs (the provider then runs inside that app's process and can
 // expose that app's private data directory through SAF).
 // ---------------------------------------------------------------------------
-val providerDexAssetDir = layout.buildDirectory.dir("generated/providerDex")
+val providerDexAssetDir = layout.buildDirectory.get().asFile.resolve("generated/providerDex")
 val buildProviderDex by tasks.registering(Copy::class) {
     dependsOn(":provider:assembleRelease")
     doFirst {
