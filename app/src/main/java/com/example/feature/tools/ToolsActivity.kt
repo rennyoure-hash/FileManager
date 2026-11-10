@@ -102,6 +102,7 @@ fun ToolsHub(onBack: () -> Unit, initialTool: String) {
                 "DUPLICATES" -> DuplicateFinderScreen(root = File("/storage/emulated/0"), onBack = { currentTool = "HUB" })
                 "ANALYZER" -> StorageAnalyzerScreen(root = File("/storage/emulated/0"), onBack = { currentTool = "HUB" })
                 "APPS" -> InstalledAppsScreen(manager = appsManager, cacheDir = File(context.cacheDir, "apks"), onBack = { currentTool = "HUB" })
+                "INJECT" -> InjectProviderScreen(onBack = { currentTool = "HUB" })
                 "TERMINAL" -> TerminalScreen(onBack = { currentTool = "HUB" })
                 "SETTINGS" -> com.example.feature.settings.SettingsScreen(settingsManager = settingsManager, onBack = { currentTool = "HUB" })
                 "NETWORK" -> com.example.feature.network.NetworkStorageScreen(
@@ -125,6 +126,7 @@ fun ToolsHubList(onSelect: (String) -> Unit) {
         "RECYCLE_BIN" to "Recycle Bin",
         "ANALYZER" to "Storage Analyzer & Treemap",
         "APPS" to "Installed Apps & APK Extractor",
+        "INJECT" to "Inject Documents Provider (patch APK, browse /data/data tanpa root)",
         "TERMINAL" to "Root Terminal (FLAG_SECURE)",
         "NETWORK" to "Network Storage, Local Server & Vault (FLAG_SECURE)",
         "SETTINGS" to "Settings"

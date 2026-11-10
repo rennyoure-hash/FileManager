@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      This module exists only to produce a standalone classes.dex containing
+      MtDocumentsProvider. That dex is shipped as an asset of the main app and
+      injected into third-party APKs by the "Inject Documents Provider" tool.
+    -->
+    <application
+        android:label="MT Provider"
+        android:allowBackup="false" />
+
+</manifest>

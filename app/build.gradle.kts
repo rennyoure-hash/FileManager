@@ -8,6 +8,31 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+// ---------------------------------------------------------------------------
+// Provider dex asset
+//
+// The ":provider" module produces a standalone dex that contains only
+// MtDocumentsProvider. It is shipped as an asset so the injector can add it to
+// third-party APKs (the provider then runs inside that app's process and can
+// expose that app's private data directory through SAF).
+// ---------------------------------------------------------------------------
+val providerDexAssetDir = layout.buildDirectory.dir("generated/providerDex")
+val buildProviderDex by tasks.registering(Copy::class) {
+    dependsOn(":provider:assembleRelease")
+    doFirst {
+        val outDir = project(":provider").layout.buildDirectory.dir("outputs/apk/release").get().asFile
+        val apk = outDir.listFiles()?.firstOrNull { it.name.endsWith(".apk") }
+            ?: error("Provider APK not found in $outDir")
+        from(zipTree(apk))
+        include("classes*.dex")
+    }
+    rename { "provider.dex" }
+    into(providerDexAssetDir)
+}
+tasks.withType<com.android.build.gradle.tasks.MergeSourceSetFolders>().configureEach {
+    dependsOn(buildProviderDex)
+}
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -62,6 +87,11 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
+  }
+  sourceSets {
+    getByName("main") {
+      assets.srcDir(providerDexAssetDir)
+    }
   }
   testOptions {
     unitTests {
@@ -119,6 +149,8 @@ dependencies {
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
+  // APK signing (v1/v2/v3) for the DocumentsProvider injector
+  implementation("com.android.tools.build:apksig:9.5.1")
 
   // Firebase Auth and Google Sign-In via Credential Manager:
   implementation(libs.firebase.auth)
