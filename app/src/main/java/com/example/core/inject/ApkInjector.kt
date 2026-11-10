@@ -148,7 +148,7 @@ object ApkInjector {
                     extra[0] = 0x35.toByte()
                     extra[1] = 0xD9.toByte()
                     extra[2] = (pad - 4).toByte()
-                    extra[3] = ((pad - 4) >> 8).toByte()
+                    extra[3] = ((pad - 4) shr 8).toByte()
                 }
             }
 
@@ -214,7 +214,7 @@ object ApkInjector {
                     extra[0] = 0x35.toByte()
                     extra[1] = 0xD9.toByte()
                     extra[2] = (e.extraLen - 4).toByte()
-                    extra[3] = ((e.extraLen - 4) >> 8).toByte()
+                    extra[3] = ((e.extraLen - 4) shr 8).toByte()
                     out.write(extra)
                 }
             }
