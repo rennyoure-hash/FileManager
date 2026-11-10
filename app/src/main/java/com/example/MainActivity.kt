@@ -94,13 +94,29 @@ class MainActivity : ComponentActivity() {
     private fun launchSystemPermissionSettings() {
         when (PermissionManager.getRecommendedRequestType()) {
             PermissionRequestType.MANAGE_ALL_FILES -> {
-                manageAllFilesLauncher.launch(PermissionManager.createManageAllFilesIntent(this))
+                launchSettings(PermissionManager.createManageAllFilesIntent(this))
             }
             PermissionRequestType.LEGACY_STORAGE -> {
                 legacyPermissionLauncher.launch(PermissionManager.getLegacyPermissions())
             }
             PermissionRequestType.STORAGE_ACCESS_FRAMEWORK -> {
                 openDocumentTreeLauncher.launch(null)
+            }
+        }
+    }
+
+    /**
+     * Launches a Settings intent, falling back to the app details page when the ROM does
+     * not resolve the dedicated screen (the user can still flip "All files access" there).
+     */
+    private fun launchSettings(intent: Intent) {
+        try {
+            manageAllFilesLauncher.launch(intent)
+        } catch (_: Exception) {
+            try {
+                manageAllFilesLauncher.launch(PermissionManager.createAppDetailsIntent(this))
+            } catch (_: Exception) {
+                Toast.makeText(this, "Cannot open Settings", Toast.LENGTH_SHORT).show()
             }
         }
     }

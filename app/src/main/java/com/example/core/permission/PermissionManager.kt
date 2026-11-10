@@ -159,24 +159,29 @@ object PermissionManager {
 
     /**
      * Creates intent to open system Settings for MANAGE_EXTERNAL_STORAGE.
+     *
+     * Prefers the direct per-app "All files access" screen, and provides the app details
+     * page as fallback (some OEM ROMs do not expose the dedicated screen). MT Manager uses
+     * the app details page for the same reason - it always resolves.
      */
     fun createManageAllFilesIntent(context: Context): Intent {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            try {
-                return Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                    data = Uri.parse("package:${context.packageName}")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            } catch (_: Exception) {
-                return Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            }
-        } else {
-            return Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            return Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                 data = Uri.parse("package:${context.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+        }
+        return createAppDetailsIntent(context)
+    }
+
+    /**
+     * Opens the app's own details page in Settings, where the user can also flip the
+     * "All files access" toggle manually.
+     */
+    fun createAppDetailsIntent(context: Context): Intent {
+        return Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     }
 
