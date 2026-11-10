@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.zip.ZipFile
 
 plugins {
   alias(libs.plugins.android.application)
@@ -38,7 +39,7 @@ abstract class ExtractProviderDex : DefaultTask() {
         val out = outputDir.get().asFile
         out.mkdirs()
         val dexes = mutableListOf<Pair<String, ByteArray>>()
-        java.util.zip.ZipFile(apk).use { zf ->
+        ZipFile(apk).use { zf ->
             zf.entries().asSequence()
                 .filter { !it.isDirectory && it.name.endsWith(".dex") }
                 .forEach { e ->
