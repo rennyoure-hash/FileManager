@@ -117,8 +117,8 @@ object ApkInjector {
                 payload = data
                 compressedSize = data.size.toLong()
             } else {
-                val bos = ByteArrayOutputStream(data.size / 2 + 64)
-                Deflater(Deflater.BEST_COMPRESSION).use { def ->
+                val def = Deflater(Deflater.BEST_COMPRESSION)
+                try {
                     def.setInput(data)
                     def.finish()
                     val buf = ByteArrayOutputStream()
@@ -129,6 +129,8 @@ object ApkInjector {
                         else if (def.needsInput()) break
                     }
                     payload = buf.toByteArray()
+                } finally {
+                    def.end()
                 }
                 compressedSize = payload.size.toLong()
             }
@@ -139,7 +141,7 @@ object ApkInjector {
             var extra: ByteArray = ByteArray(0)
             if (align) {
                 val base = headerStart + 30 + nameBytes.size
-                var pad = (ALIGNMENT - (base % ALIGNMENT)) % ALIGNMENT
+                var pad = ((ALIGNMENT - (base % ALIGNMENT)) % ALIGNMENT).toInt()
                 if (pad in 1..3) pad += ALIGNMENT
                 if (pad > 0) {
                     extraLen = pad

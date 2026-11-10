@@ -50,7 +50,7 @@ object InjectorSigner {
         val alias = "mt_inject_ephemeral"
         if (!ks.containsAlias(alias)) {
             val gen = java.security.KeyPairGenerator.getInstance(
-                java.security.KeyProperties.KEY_ALGORITHM_EC,
+                android.security.keystore.KeyProperties.KEY_ALGORITHM_EC,
                 "AndroidKeyStore"
             )
             val spec = java.security.spec.ECGenParameterSpec("secp256r1")
@@ -77,12 +77,13 @@ object InjectorSigner {
      *        schemes are used: v1 + v2 + v3).
      */
     fun sign(inputApk: File, outputApk: File, keyMaterial: KeyMaterial, minSdkVersion: Int) {
-        val signingConfig = ApkSigner.SigningConfig.Builder(
+        val signerConfig = ApkSigner.SignerConfig.Builder(
+            "MT Injector",
             keyMaterial.key,
             listOf(keyMaterial.cert)
         ).build()
 
-        ApkSigner.Builder(signingConfig)
+        ApkSigner.Builder(listOf(signerConfig))
             .setInputApk(inputApk)
             .setOutputApk(outputApk)
             .setMinSdkVersion(minSdkVersion)

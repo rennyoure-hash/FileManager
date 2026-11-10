@@ -17,13 +17,13 @@ plugins {
 // expose that app's private data directory through SAF).
 // ---------------------------------------------------------------------------
 val providerDexAssetDir = layout.buildDirectory.get().asFile.resolve("generated/providerDex")
+val providerApkFile = project(":provider").layout.buildDirectory.dir("outputs/apk/release").map { dir ->
+    dir.asFile.listFiles()?.firstOrNull { it.name.endsWith(".apk") }
+        ?: error("Provider APK not found in ${dir.asFile}")
+}
 val buildProviderDex by tasks.registering(Copy::class) {
     dependsOn(":provider:assembleRelease")
-    doFirst {
-        val outDir = project(":provider").layout.buildDirectory.dir("outputs/apk/release").get().asFile
-        val apk = outDir.listFiles()?.firstOrNull { it.name.endsWith(".apk") }
-            ?: error("Provider APK not found in $outDir")
-        from(zipTree(apk))
+    from(zipTree(providerApkFile)) {
         include("classes*.dex")
     }
     rename { "provider.dex" }

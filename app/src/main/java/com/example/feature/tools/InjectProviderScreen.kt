@@ -185,8 +185,9 @@ private fun findInjectedProviders(context: Context): List<InjectedProvider> {
             providers.forEach { provider ->
                 val authority = provider.authority ?: return@forEach
                 if (!authority.contains(ApkInjectorAuthority.MARKER)) return@forEach
+                val appInfo = info.applicationInfo ?: return@forEach
                 val label = runCatching {
-                    pm.getApplicationLabel(info.applicationInfo).toString()
+                    pm.getApplicationLabel(appInfo).toString()
                 }.getOrDefault(info.packageName)
                 result.add(InjectedProvider(info.packageName, authority, label))
             }
