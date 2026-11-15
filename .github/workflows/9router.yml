@@ -15,23 +15,32 @@ on:
           - ngrok
           - tailscale
       duration_minutes:
-        description: 'Run duration in minutes (1-345, GitHub job cap is 360)'
+        description: 'Run duration in minutes (1-340, GitHub job cap is 360)'
         required: false
-        default: '345'
+        default: '340'
         type: string
-
-concurrency:
-  group: 9router-server
-  cancel-in-progress: true
+      auto_restart:
+        description: 'Auto-trigger next run before exit (requires NINEROUTER_GH_PAT secret)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   serve:
     name: Run 9Router Gateway
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    concurrency:
+      group: 9router-server
+      cancel-in-progress: true
     permissions:
       contents: read
       checks: write
+    outputs:
+      allow_restart: ${{ steps.eligibility.outputs.allow }}
 
     steps:
       - name: Set up Node.js 24
@@ -104,12 +113,16 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           case "$PROVIDER" in
             cloudflare|cloudflare-quick)
-              curl -fsSL --retry 3 --retry-delay 2                 "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"                 -o "$HOME/.local/bin/cloudflared"
+              curl -fsSL --retry 3 --retry-delay 2 \
+                "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" \
+                -o "$HOME/.local/bin/cloudflared"
               chmod +x "$HOME/.local/bin/cloudflared"
               "$HOME/.local/bin/cloudflared" --version
               ;;
             ngrok)
-              curl -fsSL --retry 3 --retry-delay 2                 "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz"                 -o /tmp/ngrok.tgz
+              curl -fsSL --retry 3 --retry-delay 2 \
+                "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz" \
+                -o /tmp/ngrok.tgz
               tar -xzf /tmp/ngrok.tgz -C "$HOME/.local/bin"
               rm -f /tmp/ngrok.tgz
               chmod +x "$HOME/.local/bin/ngrok"
@@ -124,7 +137,7 @@ jobs:
       - name: Run 9Router and tunnel
         env:
           PROVIDER: ${{ steps.resolve.outputs.provider }}
-          DURATION_INPUT: ${{ inputs.duration_minutes || '345' }}
+          DURATION_INPUT: ${{ inputs.duration_minutes || '340' }}
           NINEROUTER_PASSWORD: ${{ secrets.NINEROUTER_PASSWORD }}
           CF_TUNNEL_TOKEN: ${{ secrets.CF_TUNNEL_TOKEN }}
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
@@ -137,12 +150,13 @@ jobs:
           GH_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
+          rm -f /tmp/9router-allow-restart
           DURATION_MIN="$DURATION_INPUT"
           if ! [[ "$DURATION_MIN" =~ ^[0-9]+$ ]]; then
-            DURATION_MIN=345
+            DURATION_MIN=340
           fi
           if [ "$DURATION_MIN" -lt 1 ]; then DURATION_MIN=1; fi
-          if [ "$DURATION_MIN" -gt 345 ]; then DURATION_MIN=345; fi
+          if [ "$DURATION_MIN" -gt 340 ]; then DURATION_MIN=340; fi
 
           ROOT_9R="$(npm root -g)/9router"
           export DATA_DIR="$HOME/.9router"
@@ -186,9 +200,17 @@ jobs:
               }));
             ')
             if [ -z "$CHECK_RUN_ID" ]; then
-              CHECK_RUN_ID=$(curl -fsSL -X POST                 -H "Authorization: Bearer $GH_TOKEN"                 -H "Accept: application/vnd.github+json"                 "https://api.github.com/repos/$GH_REPO/check-runs"                 -d "$payload" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).id||""));')
+              CHECK_RUN_ID=$(curl -fsSL -X POST \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$GH_REPO/check-runs" \
+                -d "$payload" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).id||""));')
             else
-              curl -fsSL -X PATCH                 -H "Authorization: Bearer $GH_TOKEN"                 -H "Accept: application/vnd.github+json"                 "https://api.github.com/repos/$GH_REPO/check-runs/$CHECK_RUN_ID"                 -d "$payload" >/dev/null
+              curl -fsSL -X PATCH \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$GH_REPO/check-runs/$CHECK_RUN_ID" \
+                -d "$payload" >/dev/null
             fi
             echo "Encrypted tunnel reference published to check-run (id=$CHECK_RUN_ID)."
           }
@@ -196,7 +218,11 @@ jobs:
           cleanup() {
             set +e
             if [ -n "$CHECK_RUN_ID" ]; then
-              curl -fsSL -X PATCH                 -H "Authorization: Bearer $GH_TOKEN"                 -H "Accept: application/vnd.github+json"                 "https://api.github.com/repos/$GH_REPO/check-runs/$CHECK_RUN_ID"                 -d '{"status":"completed","conclusion":"success","output":{"title":"9Router Tunnel Closed","summary":"Session ended."}}' >/dev/null 2>&1 || true
+              curl -fsSL -X PATCH \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$GH_REPO/check-runs/$CHECK_RUN_ID" \
+                -d '{"status":"completed","conclusion":"success","output":{"title":"9Router Tunnel Closed","summary":"Session ended."}}' >/dev/null 2>&1 || true
             fi
             if [ -n "$TUNNEL_PID" ]; then
               if [ "$PROVIDER" = "tailscale" ]; then
@@ -305,11 +331,15 @@ jobs:
           start_tunnel
           echo "Tunnel ($PROVIDER) is active. Keeping server alive for ${DURATION_MIN} minute(s)."
 
-          END_TS=$(( $(date +%s) + DURATION_MIN * 60 ))
-          LAST_BEAT=$(date +%s)
+          START_TS=$(date +%s)
+          END_TS=$(( START_TS + DURATION_MIN * 60 ))
+          LAST_BEAT=$START_TS
 
           while [ "$(date +%s)" -lt "$END_TS" ]; do
             sleep 15
+            if [ $(( $(date +%s) - START_TS )) -ge 120 ]; then
+              touch /tmp/9router-allow-restart
+            fi
             if ! kill -0 "$SERVER_PID" 2>/dev/null; then
               echo "[watchdog] 9Router exited; restarting..."
               start_9router
@@ -333,4 +363,48 @@ jobs:
             fi
           done
 
+          touch /tmp/9router-allow-restart
           echo "Configured duration (${DURATION_MIN}m) reached. Shutting down cleanly."
+
+      - name: Record restart eligibility
+        id: eligibility
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f /tmp/9router-allow-restart ]; then
+            echo "allow=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allow=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  retrigger:
+    name: Auto-Restart Next Session
+    needs: serve
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ !cancelled() && needs.serve.result != 'cancelled' && needs.serve.outputs.allow_restart == 'true' && (inputs.auto_restart || 'true') != 'false' }}
+    env:
+      GH_PAT: ${{ secrets.NINEROUTER_GH_PAT }}
+      GH_REPO: ${{ github.repository }}
+      GH_REF: ${{ github.ref_name }}
+      INPUT_PROVIDER: ${{ inputs.tunnel_provider || 'auto' }}
+      INPUT_DURATION: ${{ inputs.duration_minutes || '340' }}
+    steps:
+      - name: Dispatch next 9Router run
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_PAT" ]; then
+            echo "Error: Secret NINEROUTER_GH_PAT is not set; cannot auto-restart."
+            exit 1
+          fi
+          PAYLOAD=$(REF="$GH_REF" PROV="$INPUT_PROVIDER" DUR="$INPUT_DURATION" python3 -c 'import json, os; print(json.dumps({"ref": os.environ.get("REF") or "main", "inputs": {"tunnel_provider": os.environ.get("PROV") or "auto", "duration_minutes": os.environ.get("DUR") or "340", "auto_restart": "true"}}))')
+          HTTP_CODE=$(curl -sS -o /tmp/dispatch_resp.txt -w "%{http_code}" -X POST \
+            -H "Authorization: token $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GH_REPO/actions/workflows/9router.yml/dispatches" \
+            -d "$PAYLOAD")
+          if [ "$HTTP_CODE" != "204" ]; then
+            echo "Error: workflow_dispatch failed with HTTP $HTTP_CODE"
+            cat /tmp/dispatch_resp.txt || true
+            exit 1
+          fi
+          echo "Successfully dispatched next 9Router run on ref=$GH_REF (duration=${INPUT_DURATION}m, provider=${INPUT_PROVIDER})."
