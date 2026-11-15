@@ -1,0 +1,266 @@
+name: 9Router Server
+
+on:
+  workflow_dispatch:
+    inputs:
+      tunnel_provider:
+        description: 'Tunnel provider (auto picks first configured secret)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - cloudflare
+          - ngrok
+          - tailscale
+      duration_minutes:
+        description: 'Run duration in minutes (1-345, GitHub job cap is 360)'
+        required: false
+        default: '345'
+        type: string
+
+concurrency:
+  group: 9router-server
+  cancel-in-progress: true
+
+jobs:
+  serve:
+    name: Run 9Router Gateway
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install 9Router v0.5.119
+        run: npm install -g 9router@0.5.119 --no-audit --no-fund
+
+      - name: Restore 9Router state
+        env:
+          NINEROUTER_STATE_B64: ${{ secrets.NINEROUTER_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NINEROUTER_STATE_B64" ]; then
+            echo "Error: Secret NINEROUTER_STATE_B64 is not set."
+            exit 1
+          fi
+          mkdir -p "$HOME/.9router/db" "$HOME/.9router/auth"
+          printf '%s' "$NINEROUTER_STATE_B64" | base64 -d | tar -xzf - -C "$HOME/.9router"
+          chmod 700 "$HOME/.9router" "$HOME/.9router/db" "$HOME/.9router/auth"
+          find "$HOME/.9router/db" "$HOME/.9router/auth" -maxdepth 1 -type f -exec chmod 600 {} +
+          for f in "$HOME/.9router/jwt-secret" "$HOME/.9router/machine-id"; do
+            [ -f "$f" ] && chmod 600 "$f"
+          done
+          test -s "$HOME/.9router/db/data.sqlite"
+          ROOT_9R="$(npm root -g)/9router"
+          node -e "require('$ROOT_9R/hooks/sqliteRuntime').ensureSqliteRuntime({ silent: false })"
+          echo "9Router state and SQLite runtime restored."
+
+      - name: Resolve tunnel provider
+        id: resolve
+        env:
+          INPUT_PROVIDER: ${{ inputs.tunnel_provider || 'auto' }}
+          CF_SET: ${{ secrets.CF_TUNNEL_TOKEN != '' }}
+          NGROK_SET: ${{ secrets.NGROK_AUTHTOKEN != '' }}
+          TS_SET: ${{ secrets.TS_AUTHKEY != '' }}
+        run: |
+          set -euo pipefail
+          PROVIDER="$INPUT_PROVIDER"
+          if [ "$PROVIDER" = "auto" ]; then
+            if [ "$CF_SET" = "true" ]; then
+              PROVIDER="cloudflare"
+            elif [ "$NGROK_SET" = "true" ]; then
+              PROVIDER="ngrok"
+            elif [ "$TS_SET" = "true" ]; then
+              PROVIDER="tailscale"
+            else
+              echo "Error: No tunnel secret configured. Add CF_TUNNEL_TOKEN, NGROK_AUTHTOKEN, or TS_AUTHKEY in repository Secrets."
+              exit 1
+            fi
+          else
+            case "$PROVIDER" in
+              cloudflare) [ "$CF_SET" = "true" ] || { echo "Error: CF_TUNNEL_TOKEN secret is missing."; exit 1; } ;;
+              ngrok)      [ "$NGROK_SET" = "true" ] || { echo "Error: NGROK_AUTHTOKEN secret is missing."; exit 1; } ;;
+              tailscale)  [ "$TS_SET" = "true" ] || { echo "Error: TS_AUTHKEY secret is missing."; exit 1; } ;;
+              *) echo "Error: Unsupported tunnel provider: $PROVIDER"; exit 1 ;;
+            esac
+          fi
+          echo "provider=$PROVIDER" >> "$GITHUB_OUTPUT"
+          echo "Selected tunnel provider: $PROVIDER"
+
+      - name: Install tunnel client
+        env:
+          PROVIDER: ${{ steps.resolve.outputs.provider }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          case "$PROVIDER" in
+            cloudflare)
+              curl -fsSL --retry 3 --retry-delay 2                 "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"                 -o "$HOME/.local/bin/cloudflared"
+              chmod +x "$HOME/.local/bin/cloudflared"
+              "$HOME/.local/bin/cloudflared" --version
+              ;;
+            ngrok)
+              curl -fsSL --retry 3 --retry-delay 2                 "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz"                 -o /tmp/ngrok.tgz
+              tar -xzf /tmp/ngrok.tgz -C "$HOME/.local/bin"
+              rm -f /tmp/ngrok.tgz
+              chmod +x "$HOME/.local/bin/ngrok"
+              "$HOME/.local/bin/ngrok" version
+              ;;
+            tailscale)
+              curl -fsSL --retry 3 --retry-delay 2 https://tailscale.com/install.sh | sh
+              tailscale version
+              ;;
+          esac
+
+      - name: Run 9Router and tunnel
+        env:
+          PROVIDER: ${{ steps.resolve.outputs.provider }}
+          DURATION_INPUT: ${{ inputs.duration_minutes || '345' }}
+          NINEROUTER_PASSWORD: ${{ secrets.NINEROUTER_PASSWORD }}
+          CF_TUNNEL_TOKEN: ${{ secrets.CF_TUNNEL_TOKEN }}
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+          NGROK_DOMAIN: ${{ secrets.NGROK_DOMAIN }}
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_HOSTNAME: ${{ secrets.TS_HOSTNAME }}
+        run: |
+          set -euo pipefail
+          DURATION_MIN="$DURATION_INPUT"
+          if ! [[ "$DURATION_MIN" =~ ^[0-9]+$ ]]; then
+            DURATION_MIN=345
+          fi
+          if [ "$DURATION_MIN" -lt 1 ]; then DURATION_MIN=1; fi
+          if [ "$DURATION_MIN" -gt 345 ]; then DURATION_MIN=345; fi
+
+          ROOT_9R="$(npm root -g)/9router"
+          export DATA_DIR="$HOME/.9router"
+          export PORT=20128
+          export NODE_PATH="$HOME/.9router/runtime/node_modules:$ROOT_9R/app/node_modules"
+          export INITIAL_PASSWORD="${NINEROUTER_PASSWORD:-}"
+          if [ "$PROVIDER" = "tailscale" ]; then
+            export HOSTNAME="0.0.0.0"
+          else
+            export HOSTNAME="127.0.0.1"
+          fi
+
+          SERVER_PID=""
+          TUNNEL_PID=""
+
+          cleanup() {
+            set +e
+            if [ -n "$TUNNEL_PID" ]; then
+              if [ "$PROVIDER" = "tailscale" ]; then
+                sudo tailscale logout >/dev/null 2>&1 || true
+                sudo kill "$TUNNEL_PID" >/dev/null 2>&1 || true
+              else
+                kill "$TUNNEL_PID" >/dev/null 2>&1 || true
+              fi
+            fi
+            if [ -n "$SERVER_PID" ]; then
+              kill "$SERVER_PID" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup EXIT INT TERM
+
+          start_9router() {
+            node --max-old-space-size=4096 "$ROOT_9R/app/custom-server.js" > /tmp/9router.log 2>&1 &
+            SERVER_PID=$!
+            for _ in $(seq 1 45); do
+              if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+                echo "Error: 9Router server exited unexpectedly during startup."
+                return 1
+              fi
+              if curl -sf "http://127.0.0.1:${PORT}/api/auth/status" >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 1
+            done
+            echo "Error: 9Router server did not become ready within 45s."
+            return 1
+          }
+
+          start_tunnel() {
+            case "$PROVIDER" in
+              cloudflare)
+                cloudflared tunnel --no-autoupdate --logfile /tmp/tunnel.log run --token "$CF_TUNNEL_TOKEN" >/dev/null 2>&1 &
+                TUNNEL_PID=$!
+                sleep 5
+                if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+                  echo "Error: cloudflared exited immediately. Verify CF_TUNNEL_TOKEN."
+                  return 1
+                fi
+                ;;
+              ngrok)
+                ngrok config add-authtoken "$NGROK_AUTHTOKEN" >/dev/null 2>&1
+                if [ -n "$NGROK_DOMAIN" ]; then
+                  ngrok http "127.0.0.1:${PORT}" --domain="$NGROK_DOMAIN" --log=/tmp/tunnel.log >/dev/null 2>&1 &
+                else
+                  ngrok http "127.0.0.1:${PORT}" --log=/tmp/tunnel.log >/dev/null 2>&1 &
+                fi
+                TUNNEL_PID=$!
+                for _ in $(seq 1 20); do
+                  if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+                    echo "Error: ngrok exited immediately. Verify NGROK_AUTHTOKEN / NGROK_DOMAIN."
+                    return 1
+                  fi
+                  if curl -sf "http://127.0.0.1:4040/api/tunnels" | grep -q "public_url"; then
+                    return 0
+                  fi
+                  sleep 1
+                done
+                echo "Error: ngrok tunnel did not establish within 20s."
+                return 1
+                ;;
+              tailscale)
+                sudo mkdir -p /var/run/tailscale
+                sudo tailscaled --state=mem: --socket=/var/run/tailscale/tailscaled.sock >/tmp/tailscaled.log 2>&1 &
+                TUNNEL_PID=$!
+                for _ in $(seq 1 15); do
+                  [ -S /var/run/tailscale/tailscaled.sock ] && break
+                  sleep 1
+                done
+                TS_NODE_NAME="${TS_HOSTNAME:-9router-gh}"
+                sudo tailscale up --authkey="$TS_AUTHKEY" --hostname="$TS_NODE_NAME" --accept-dns=false >/dev/null 2>&1
+                sudo tailscale serve --bg "$PORT" >/dev/null 2>&1 || true
+                ;;
+            esac
+          }
+
+          start_9router
+          echo "9Router is listening on 127.0.0.1:${PORT}."
+          start_tunnel
+          echo "Tunnel ($PROVIDER) is active. Keeping server alive for ${DURATION_MIN} minute(s)."
+
+          END_TS=$(( $(date +%s) + DURATION_MIN * 60 ))
+          LAST_BEAT=$(date +%s)
+
+          while [ "$(date +%s)" -lt "$END_TS" ]; do
+            sleep 15
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "[watchdog] 9Router exited; restarting..."
+              start_9router
+            fi
+            if [ "$PROVIDER" = "tailscale" ]; then
+              if ! sudo kill -0 "$TUNNEL_PID" 2>/dev/null; then
+                echo "[watchdog] tailscaled exited; restarting..."
+                start_tunnel
+              fi
+            else
+              if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+                echo "[watchdog] tunnel ($PROVIDER) exited; restarting..."
+                start_tunnel
+              fi
+            fi
+            NOW=$(date +%s)
+            if [ $(( NOW - LAST_BEAT )) -ge 600 ]; then
+              REM=$(( (END_TS - NOW) / 60 ))
+              echo "[heartbeat] 9router=ok | tunnel=$PROVIDER | remaining=${REM}m"
+              LAST_BEAT=$NOW
+            fi
+          done
+
+          echo "Configured duration (${DURATION_MIN}m) reached. Shutting down cleanly."
