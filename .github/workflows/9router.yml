@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       tunnel_provider:
-        description: 'Tunnel provider (auto picks first configured secret)'
+        description: 'Tunnel provider (auto picks configured secret, else cloudflare-quick)'
         required: false
         default: 'auto'
         type: choice
         options:
           - auto
+          - cloudflare-quick
           - cloudflare
           - ngrok
           - tailscale
@@ -28,6 +29,9 @@ jobs:
     name: Run 9Router Gateway
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    permissions:
+      contents: read
+      checks: write
 
     steps:
       - name: Set up Node.js 24
@@ -77,11 +81,11 @@ jobs:
             elif [ "$TS_SET" = "true" ]; then
               PROVIDER="tailscale"
             else
-              echo "Error: No tunnel secret configured. Add CF_TUNNEL_TOKEN, NGROK_AUTHTOKEN, or TS_AUTHKEY in repository Secrets."
-              exit 1
+              PROVIDER="cloudflare-quick"
             fi
           else
             case "$PROVIDER" in
+              cloudflare-quick) ;;
               cloudflare) [ "$CF_SET" = "true" ] || { echo "Error: CF_TUNNEL_TOKEN secret is missing."; exit 1; } ;;
               ngrok)      [ "$NGROK_SET" = "true" ] || { echo "Error: NGROK_AUTHTOKEN secret is missing."; exit 1; } ;;
               tailscale)  [ "$TS_SET" = "true" ] || { echo "Error: TS_AUTHKEY secret is missing."; exit 1; } ;;
@@ -99,7 +103,7 @@ jobs:
           mkdir -p "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           case "$PROVIDER" in
-            cloudflare)
+            cloudflare|cloudflare-quick)
               curl -fsSL --retry 3 --retry-delay 2                 "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"                 -o "$HOME/.local/bin/cloudflared"
               chmod +x "$HOME/.local/bin/cloudflared"
               "$HOME/.local/bin/cloudflared" --version
@@ -127,6 +131,10 @@ jobs:
           NGROK_DOMAIN: ${{ secrets.NGROK_DOMAIN }}
           TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
           TS_HOSTNAME: ${{ secrets.TS_HOSTNAME }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          GH_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           DURATION_MIN="$DURATION_INPUT"
@@ -149,9 +157,47 @@ jobs:
 
           SERVER_PID=""
           TUNNEL_PID=""
+          CHECK_RUN_ID=""
+
+          publish_encrypted_url() {
+            local raw_url="$1"
+            if [ -z "${NINEROUTER_PASSWORD:-}" ]; then
+              echo "Error: NINEROUTER_PASSWORD secret is required to publish encrypted tunnel URL."
+              return 1
+            fi
+            local enc_url
+            enc_url=$(RAW_URL="$raw_url" PW="$NINEROUTER_PASSWORD" node -e '
+              const c = require("crypto");
+              const key = c.createHash("sha256").update(process.env.PW).digest();
+              const iv = c.randomBytes(12);
+              const cipher = c.createCipheriv("aes-256-gcm", key, iv);
+              const ct = Buffer.concat([cipher.update(process.env.RAW_URL, "utf8"), cipher.final()]);
+              const tag = cipher.getAuthTag();
+              process.stdout.write(["enc1", iv.toString("base64url"), tag.toString("base64url"), ct.toString("base64url")].join("."));
+            ')
+            local payload
+            payload=$(ENC_LINE="9ROUTER_TUNNEL_ENC=${enc_url}" SHA="$GH_SHA" RID="$GH_RUN_ID" node -e '
+              console.log(JSON.stringify({
+                name: "9router-tunnel",
+                head_sha: process.env.SHA,
+                external_id: process.env.RID,
+                status: "in_progress",
+                output: { title: "9Router Tunnel Active", summary: process.env.ENC_LINE }
+              }));
+            ')
+            if [ -z "$CHECK_RUN_ID" ]; then
+              CHECK_RUN_ID=$(curl -fsSL -X POST                 -H "Authorization: Bearer $GH_TOKEN"                 -H "Accept: application/vnd.github+json"                 "https://api.github.com/repos/$GH_REPO/check-runs"                 -d "$payload" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).id||""));')
+            else
+              curl -fsSL -X PATCH                 -H "Authorization: Bearer $GH_TOKEN"                 -H "Accept: application/vnd.github+json"                 "https://api.github.com/repos/$GH_REPO/check-runs/$CHECK_RUN_ID"                 -d "$payload" >/dev/null
+            fi
+            echo "Encrypted tunnel reference published to check-run (id=$CHECK_RUN_ID)."
+          }
 
           cleanup() {
             set +e
+            if [ -n "$CHECK_RUN_ID" ]; then
+              curl -fsSL -X PATCH                 -H "Authorization: Bearer $GH_TOKEN"                 -H "Accept: application/vnd.github+json"                 "https://api.github.com/repos/$GH_REPO/check-runs/$CHECK_RUN_ID"                 -d '{"status":"completed","conclusion":"success","output":{"title":"9Router Tunnel Closed","summary":"Session ended."}}' >/dev/null 2>&1 || true
+            fi
             if [ -n "$TUNNEL_PID" ]; then
               if [ "$PROVIDER" = "tailscale" ]; then
                 sudo tailscale logout >/dev/null 2>&1 || true
@@ -185,8 +231,32 @@ jobs:
 
           start_tunnel() {
             case "$PROVIDER" in
+              cloudflare-quick)
+                rm -f /tmp/tunnel.log
+                cloudflared tunnel --no-autoupdate --protocol http2 --url "http://127.0.0.1:${PORT}" --retries 99 --logfile /tmp/tunnel.log >/dev/null 2>&1 &
+                TUNNEL_PID=$!
+                local quick_url=""
+                for _ in $(seq 1 45); do
+                  if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+                    echo "Error: cloudflared quick tunnel exited unexpectedly."
+                    return 1
+                  fi
+                  if [ -f /tmp/tunnel.log ]; then
+                    quick_url=$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/tunnel.log | grep -v '^https://api\.trycloudflare\.com$' | tail -n 1 || true)
+                    if [ -n "$quick_url" ]; then
+                      break
+                    fi
+                  fi
+                  sleep 1
+                done
+                if [ -z "$quick_url" ]; then
+                  echo "Error: Quick tunnel URL did not appear within 45s."
+                  return 1
+                fi
+                publish_encrypted_url "$quick_url"
+                ;;
               cloudflare)
-                cloudflared tunnel --no-autoupdate --logfile /tmp/tunnel.log run --token "$CF_TUNNEL_TOKEN" >/dev/null 2>&1 &
+                cloudflared tunnel --no-autoupdate --protocol http2 --logfile /tmp/tunnel.log run --token "$CF_TUNNEL_TOKEN" >/dev/null 2>&1 &
                 TUNNEL_PID=$!
                 sleep 5
                 if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
