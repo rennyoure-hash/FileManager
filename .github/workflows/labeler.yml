@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Auto Label
-        uses: actions/labeler@v4
+        uses: actions/labeler@v7
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           sync-labels: true
