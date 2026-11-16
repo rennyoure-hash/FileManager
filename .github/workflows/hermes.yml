@@ -246,7 +246,7 @@ jobs:
               const plain = Buffer.concat([dec.update(ct), dec.final()]);
               fs.writeFileSync("/tmp/hermes-state.tar.gz", plain);
             '
-            tar -xzf /tmp/hermes-state.tar.gz -C "$HOME/.hermes"
+            tar -xzf /tmp/hermes-state.tar.gz -C "$HOME/.hermes" --exclude='./tools' --exclude='./image_cache' --exclude='./audio_cache' --exclude='./telemetry' --exclude='./hermes-agent' --exclude='./.env'
             rm -rf /tmp/hermes-state.tar.gz /tmp/hermes-state-in
             chmod 700 "$HOME/.hermes"
             echo "Restored encrypted Hermes state."
@@ -828,7 +828,10 @@ jobs:
           src = Path.home() / ".hermes"
           dst = Path("/tmp/hermes-stage")
 
-          skip_top = {".env", "hermes-agent", "logs", "cache", ".cache", "tmp", "node_modules"}
+          skip_top = {
+              ".env", "hermes-agent", "tools", "logs", "cache", ".cache",
+              "image_cache", "audio_cache", "telemetry", "tmp", "node_modules",
+          }
           for item in src.iterdir():
               name = item.name
               if name in skip_top or name.startswith(("state.db", ".env")) or name.endswith((".log", ".pid", ".sock", ".lock", ".tmp")):
