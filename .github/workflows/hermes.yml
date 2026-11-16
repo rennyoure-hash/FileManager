@@ -362,13 +362,10 @@ jobs:
           PY
           chmod 700 /tmp/resolve_9router.py
 
-          HERMES_PY=""
-          for cand in "$HOME"/.hermes/installs/*/environments/*/bin/python "$HOME/.local/share/hermes-agent/.hermes/bin/python"; do
-            if [ -x "$cand" ]; then
-              HERMES_PY="$cand"
-              break
-            fi
-          done
+          HERMES_PY="$(find "$HOME/.hermes/installs" "$HOME/.local/share/hermes-agent" -maxdepth 6 \( -type f -o -type l \) -name "python3*" -path "*/bin/*" 2>/dev/null | head -n 1 || true)"
+          if [ -z "$HERMES_PY" ] && [ -x "$HOME/.local/share/hermes-agent/scripts/hermes-python" ]; then
+            HERMES_PY="$HOME/.local/share/hermes-agent/scripts/hermes-python"
+          fi
           if [ -z "$HERMES_PY" ]; then
             HERMES_PY="python3"
           fi
@@ -524,7 +521,7 @@ jobs:
           if not has_allowlist:
               print("WARNING: TELEGRAM_ALLOWED_USERS secret is empty. Run 'hermes-gh connect-telegram' to authorize your Telegram user ID.")
 
-          # Verify Hermes runtime resolution and run a one-shot non-secret LLM smoke test.
+          # Verify Hermes runtime resolution and run a fast direct LLM probe (redacted).
           try:
               import sys as _sys
               from urllib.parse import urlparse as _urlparse
@@ -536,15 +533,27 @@ jobs:
               bu = str(rt.get("base_url") or "")
               host_tail = ".".join(_urlparse(bu).netloc.split(".")[-2:]) if bu else "none"
               print(f"Hermes runtime resolved: provider={rt.get('provider')} api_mode={rt.get('api_mode')} host_suffix={host_tail} has_key={bool(rt.get('api_key'))}")
+              import openai
+              cli = openai.OpenAI(base_url=bu, api_key=rt.get("api_key") or "none", timeout=20.0)
+              for probe_model in [model_cfg.get("default"), "ag/gemini-3.8-flash-high"]:
+                  if not probe_model:
+                      continue
+                  try:
+                      r_chat = cli.chat.completions.create(
+                          model=probe_model,
+                          messages=[{"role": "user", "content": "Reply with just OK"}],
+                          max_tokens=128,
+                      )
+                      print(f"LLM probe OK ({probe_model}): id={getattr(r_chat, 'id', 'ok')}")
+                      break
+                  except Exception as pexc:
+                      sc = getattr(pexc, "status_code", None)
+                      resp_obj = getattr(pexc, "response", None)
+                      cf_ray = resp_obj.headers.get("cf-ray", "") if resp_obj is not None else ""
+                      print(f"LLM probe WARN ({probe_model}): type={type(pexc).__name__} status={sc} cf_ray={cf_ray} msg={str(pexc)[:200]}")
           except Exception as rtexc:
               print(f"Hermes runtime check warning: {type(rtexc).__name__}: {str(rtexc)[:200]}")
           PY
-          set +e
-          PROBE_OUT=$(timeout 45 "$HOME/.local/bin/hermes" chat -q "Reply with exactly: OK" 2>&1)
-          PROBE_RC=$?
-          set -e
-          echo "Hermes chat probe rc=${PROBE_RC}"
-          printf '%s\n' "$PROBE_OUT" | grep -E "HTTP|530|503|429|401|404|Error|ERROR|OK|Fallback|fallback|rate" | head -n 12 || true
 
       - name: Resolve and install tunnel client (if API server enabled)
         id: tunnel
@@ -625,13 +634,10 @@ jobs:
           if [ "$DURATION_MIN" -lt 1 ]; then DURATION_MIN=1; fi
           if [ "$DURATION_MIN" -gt 340 ]; then DURATION_MIN=340; fi
 
-          HERMES_PY=""
-          for cand in "$HOME"/.hermes/installs/*/environments/*/bin/python "$HOME/.local/share/hermes-agent/.hermes/bin/python"; do
-            if [ -x "$cand" ]; then
-              HERMES_PY="$cand"
-              break
-            fi
-          done
+          HERMES_PY="$(find "$HOME/.hermes/installs" "$HOME/.local/share/hermes-agent" -maxdepth 6 \( -type f -o -type l \) -name "python3*" -path "*/bin/*" 2>/dev/null | head -n 1 || true)"
+          if [ -z "$HERMES_PY" ] && [ -x "$HOME/.local/share/hermes-agent/scripts/hermes-python" ]; then
+            HERMES_PY="$HOME/.local/share/hermes-agent/scripts/hermes-python"
+          fi
           if [ -z "$HERMES_PY" ]; then
             HERMES_PY="python3"
           fi
