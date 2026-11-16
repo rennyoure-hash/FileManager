@@ -371,12 +371,25 @@ jobs:
           fi
 
           "$HERMES_PY" - <<'PY'
+          import io
           import json
           import os
           import subprocess
           import urllib.request
           from pathlib import Path
-          import yaml
+
+          try:
+              import yaml as _pyyaml
+              def yaml_load(text): return _pyyaml.safe_load(text)
+              def yaml_dump(obj): return _pyyaml.safe_dump(obj, sort_keys=False, allow_unicode=True)
+          except ModuleNotFoundError:
+              from ruamel.yaml import YAML as _RuamelYAML
+              _ry = _RuamelYAML()
+              def yaml_load(text): return _ry.load(text)
+              def yaml_dump(obj):
+                  buf = io.StringIO()
+                  _ry.dump(obj, buf)
+                  return buf.getvalue()
 
           hermes_dir = Path.home() / ".hermes"
           env_path = hermes_dir / ".env"
@@ -416,9 +429,9 @@ jobs:
 
           cfg = {}
           if cfg_path.exists():
-              loaded = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+              loaded = yaml_load(cfg_path.read_text(encoding="utf-8"))
               if isinstance(loaded, dict):
-                  cfg = loaded
+                  cfg = dict(loaded)
 
           db_cfg = cfg.setdefault("database", {})
           if isinstance(db_cfg, dict):
@@ -501,7 +514,7 @@ jobs:
                   model_cfg["default"] = input_model
 
           tmp_cfg = hermes_dir / "config.yaml.tmp"
-          tmp_cfg.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+          tmp_cfg.write_text(yaml_dump(cfg), encoding="utf-8")
           os.chmod(tmp_cfg, 0o600)
           tmp_cfg.replace(cfg_path)
 
@@ -721,12 +734,25 @@ jobs:
             fi
             local changed
             changed=$(NEW_URL="$new_url" "$HERMES_PY" - <<'PY'
+          import io
           import os
           from pathlib import Path
-          import yaml
+
+          try:
+              import yaml as _pyyaml
+              def yaml_load(text): return _pyyaml.safe_load(text)
+              def yaml_dump(obj): return _pyyaml.safe_dump(obj, sort_keys=False, allow_unicode=True)
+          except ModuleNotFoundError:
+              from ruamel.yaml import YAML as _RuamelYAML
+              _ry = _RuamelYAML()
+              def yaml_load(text): return _ry.load(text)
+              def yaml_dump(obj):
+                  buf = io.StringIO()
+                  _ry.dump(obj, buf)
+                  return buf.getvalue()
 
           cfg_path = Path.home() / ".hermes" / "config.yaml"
-          cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+          cfg = yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
           model_cfg = cfg.setdefault("model", {})
           new_url = os.environ["NEW_URL"].strip()
           if model_cfg.get("base_url") != new_url:
@@ -737,7 +763,7 @@ jobs:
                       if isinstance(entry, dict) and entry.get("key_env") == "NINEROUTER_API_KEY":
                           entry["base_url"] = new_url
               tmp = cfg_path.with_suffix(".yaml.tmp")
-              tmp.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
+              tmp.write_text(yaml_dump(cfg), encoding="utf-8")
               os.chmod(tmp, 0o600)
               tmp.replace(cfg_path)
               print("changed")
