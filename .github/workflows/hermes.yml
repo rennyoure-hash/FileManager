@@ -452,6 +452,22 @@ jobs:
               model_cfg["key_env"] = "NINEROUTER_API_KEY"
               model_cfg["api_mode"] = "chat_completions"
               model_cfg["default"] = input_model or model_cfg.get("default") or "ag/gemini-4-hydrogen-xhigh"
+              cfg["fallback_providers"] = [
+                  {
+                      "provider": "custom",
+                      "base_url": direct_v1,
+                      "key_env": "NINEROUTER_API_KEY",
+                      "api_mode": "chat_completions",
+                      "model": "ag/gemini-3.8-flash-high",
+                  },
+                  {
+                      "provider": "custom",
+                      "base_url": direct_v1,
+                      "key_env": "NINEROUTER_API_KEY",
+                      "api_mode": "chat_completions",
+                      "model": "ag/gemini-4-argon-high",
+                  },
+              ]
               print("9Router direct upstream verified (status=200).")
           elif provider == "custom":
               model_cfg["provider"] = "custom"
@@ -499,6 +515,39 @@ jobs:
           print(f"Telegram bot verified: @{username} | allowlist_set={has_allowlist} | llm_provider={provider} | model={model_cfg.get('default')}")
           if not has_allowlist:
               print("WARNING: TELEGRAM_ALLOWED_USERS secret is empty. Run 'hermes-gh connect-telegram' to authorize your Telegram user ID.")
+
+          # Verify Hermes runtime resolution and test live LLM endpoint from this runner (redacted).
+          try:
+              import sys as _sys
+              from urllib.parse import urlparse as _urlparse
+              hermes_repo = Path.home() / ".local" / "share" / "hermes-agent"
+              if str(hermes_repo) not in _sys.path:
+                  _sys.path.insert(0, str(hermes_repo))
+              from hermes_cli.runtime_provider import resolve_runtime_provider
+              rt = resolve_runtime_provider()
+              bu = str(rt.get("base_url") or "")
+              host_tail = ".".join(_urlparse(bu).netloc.split(".")[-2:]) if bu else "none"
+              print(f"Hermes runtime resolved: provider={rt.get('provider')} api_mode={rt.get('api_mode')} host_suffix={host_tail} has_key={bool(rt.get('api_key'))}")
+              import openai
+              cli = openai.OpenAI(base_url=bu, api_key=rt.get("api_key") or "none", timeout=25.0)
+              for probe_model in [model_cfg.get("default"), "ag/gemini-3.8-flash-high"]:
+                  if not probe_model:
+                      continue
+                  try:
+                      r_chat = cli.chat.completions.create(
+                          model=probe_model,
+                          messages=[{"role": "user", "content": "Say OK"}],
+                          max_tokens=128,
+                      )
+                      print(f"LLM probe OK ({probe_model}): id={getattr(r_chat, 'id', 'ok')}")
+                      break
+                  except Exception as pexc:
+                      sc = getattr(pexc, "status_code", None)
+                      resp_obj = getattr(pexc, "response", None)
+                      cf_ray = resp_obj.headers.get("cf-ray", "") if resp_obj is not None else ""
+                      print(f"LLM probe WARN ({probe_model}): type={type(pexc).__name__} status={sc} cf_ray={cf_ray} msg={str(pexc)[:200]}")
+          except Exception as rtexc:
+              print(f"Hermes runtime check warning: {type(rtexc).__name__}: {str(rtexc)[:200]}")
           PY
 
       - name: Resolve and install tunnel client (if API server enabled)
@@ -674,6 +723,11 @@ jobs:
           new_url = os.environ["NEW_URL"].strip()
           if model_cfg.get("base_url") != new_url:
               model_cfg["base_url"] = new_url
+              fb = cfg.get("fallback_providers")
+              if isinstance(fb, list):
+                  for entry in fb:
+                      if isinstance(entry, dict) and entry.get("key_env") == "NINEROUTER_API_KEY":
+                          entry["base_url"] = new_url
               tmp = cfg_path.with_suffix(".yaml.tmp")
               tmp.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
               os.chmod(tmp, 0o600)
